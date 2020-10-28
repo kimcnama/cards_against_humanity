@@ -1,10 +1,10 @@
 import React, {Component} from 'react';
-import {View, StyleSheet} from 'react-native';
+import {View, StyleSheet, Button} from 'react-native';
 
 import {connect} from 'react-redux';
 import {addCard} from './../../actions/hand';
 
-import {w3cwebsocket as W3CWebSocket} from 'websocket';
+import Sockette from 'sockette';
 
 const mapStateToProps = (state) => {
   return {
@@ -12,16 +12,26 @@ const mapStateToProps = (state) => {
   };
 };
 
-
 const mapDispatchToProps = (dispatch) => {
   return {
     addCard: (cardText) => dispatch(addCard(cardText)),
   };
 };
 
-const client = new W3CWebSocket(
-  'wss://7fzsgk085d.execute-api.eu-west-1.amazonaws.com/development',
-);
+const wsURL =
+  'wss://7fzsgk085d.execute-api.eu-west-1.amazonaws.com/development';
+
+//Init WebSockets with Cognito Access Token
+const client = new Sockette(wsURL, {
+  timeout: 5e3,
+  maxAttempts: 1,
+  onopen: (e) => console.log('connected:', e),
+  onmessage: (e) => console.log('Message Received:', e),
+  onreconnect: (e) => console.log('Reconnecting...', e),
+  onmaximum: (e) => console.log('Stop Attempting!', e),
+  onclose: (e) => console.log('Closed!', e),
+  onerror: (e) => console.log('Error:', e),
+});
 
 class HandScreen extends Component {
   constructor() {
@@ -38,8 +48,24 @@ class HandScreen extends Component {
     };
   }
 
+  sendMessage() {
+    client.json({
+      action: 'joinRoom',
+      playerName: 'reeb',
+      roomName: 'select',
+    });
+  }
+
   render() {
-    return (<View style={styles.conatiner}></View>);
+    return (
+      <View style={styles.conatiner}>
+        <Button
+          onPress={() => this.sendMessage()}
+          title="Send Message"
+          color="#841584"
+        />
+      </View>
+    );
   }
 }
 
@@ -51,7 +77,6 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'blue',
   },
   textBox: {
     height: 40,

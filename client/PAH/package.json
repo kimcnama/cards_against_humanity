@@ -21,6 +21,7 @@
     "react-native-screens": "^2.12.0",
     "react-redux": "^7.2.1",
     "redux": "^4.0.5",
+    "sockette": "^2.0.6",
     "websocket": "^1.0.32"
   },
   "devDependencies": {
