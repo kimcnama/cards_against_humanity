@@ -3,3 +3,5 @@ export const REMOVE_CARD = 'REMOVE_CARD';
 export const ADD_ROOM = 'ADD_ROOM';
 export const ADD_GROUP = 'ADD_GROUP';
 export const ADD_PLAYER_NAME = 'ADD_PLAYER_NAME';
+
+export const SET_ON_MESSAGE_FUNCTION = 'SET_ON_MESSAGE_FUNCTION';
