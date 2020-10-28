@@ -4,6 +4,7 @@ import {NavigationContainer} from "@react-navigation/native";
 import HeaderStyle from './HeaderStyles';
 
 import GameSetup from './../screens/setup/gameSetup';
+import HandScreen from './../screens/hand/handScreen';
 
 interface RoutesProps {}
 
@@ -13,10 +14,15 @@ function GameSetupScreen({navigation}) {
     return <GameSetup navigation={navigation} />;
 }
 
+function HandViewScreen({navigation}) {
+    return <HandScreen navigation={navigation} />;
+}
+
 export const Routes: React.FC<RoutesProps> = ({}) => (
     <NavigationContainer>
         <Stack.Navigator screenOptions={HeaderStyle} >
             <Stack.Screen name="GameSetup" component={GameSetupScreen} />
+            <Stack.Screen name="Hand" component={HandViewScreen} />
         </Stack.Navigator>
     </NavigationContainer>
 )

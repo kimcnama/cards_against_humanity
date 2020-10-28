@@ -15,9 +15,9 @@ import {addGroup, addRoom, addPlayerName} from './../../actions/game';
 // required for redux
 const mapDispatchToProps = (dispatch) => {
   return {
-    addGroup: (group) => dispatch(addGroup(group)),
-    addRoom: (room) => dispatch(addRoom(room)),
-    addPlayerName: (player) => dispatch(addPlayerName(player)),
+    addGroupProp: (group) => dispatch(addGroup(group)),
+    addRoomProp: (room) => dispatch(addRoom(room)),
+    addPlayerNameProp: (player) => dispatch(addPlayerName(player)),
   };
 };
 
@@ -78,9 +78,10 @@ class GameSetup extends React.Component {
       });
       return;
     }
-    this.props.addGroup(this.state.groupName);
-    this.props.addRoom(this.state.roomName);
-    this.props.addPlayerName(this.state.playerName);
+    this.props.addRoomProp(this.state.roomName);
+    this.props.addPlayerNameProp(this.state.playerName);
+    this.props.addGroupProp(this.state.groupName);
+    this.props.navigation.replace('Hand');
   }
 
   render() {
