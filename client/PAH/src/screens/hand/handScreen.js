@@ -35,6 +35,7 @@ class HandScreen extends Component {
       serverMessage: '',
       answers: [],
       answerReveal: false,
+      answerCards: [],
       currentQuestion: '',
       playersAndScores: [],
     };
@@ -96,6 +97,20 @@ class HandScreen extends Component {
           serverMessage: body.message,
         });
         return;
+      case 'initialQuestion':
+        console.log('init question', body.question);
+        this.setState({
+          ...this.state,
+          currentQuestion: body.question,
+        });
+        return;
+      case 'initialAnswerCards':
+        console.log('initialAnswerCards', body.answers);
+        this.setState({
+          ...this.state,
+          answerCards: body.answers,
+        });
+        return;
       case 'error':
         console.log('error message', body);
         return;
@@ -117,6 +132,7 @@ class HandScreen extends Component {
       action: 'joinRoom',
       playerName: this.props.playerName,
       roomName: this.props.roomName,
+      groupName: this.props.groupName,
     });
   }
 
@@ -137,6 +153,28 @@ class HandScreen extends Component {
     });
   }
 
+  selectAnswerCard(_answer, _id) {
+    this.client.json({
+      action: 'onAnswer',
+      answerToNextQuestion: true,
+      answer: _answer,
+      addToDB: false,
+      id: _id,
+      roomName: this.props.roomName,
+      groupName: this.props.groupName,
+      playerName: this.props.playerName,
+    });
+
+    var answerHandCopy = this.state.answerCards.filter(
+      (card) => card.id !== _id,
+    );
+
+    this.setState({
+      ...this.state,
+      answerCards: answerHandCopy,
+    });
+  }
+
   mapAnswers() {
     return (
       <View>
@@ -145,6 +183,27 @@ class HandScreen extends Component {
             <Button
               onPress={this.selectAnswer.bind(this, i)}
               title={answer.answerStruct.answer}
+              key={i}
+              color="#841584"
+            />
+          );
+        })}
+      </View>
+    );
+  }
+
+  mapAnswerCards() {
+    return (
+      <View>
+        {this.state.answerCards.map((answer, i) => {
+          return (
+            <Button
+              onPress={this.selectAnswerCard.bind(
+                this,
+                answer.answer,
+                answer.id,
+              )}
+              title={answer.answer}
               key={i}
               color="#841584"
             />
@@ -171,6 +230,8 @@ class HandScreen extends Component {
   render() {
     return (
       <View style={styles.conatiner}>
+        <Text>Current Q: {this.state.currentQuestion}</Text>
+        {this.mapAnswerCards()}
         <Text>Players: {this.state.playersInGame}</Text>
         <Text>Conn ID: {this.state.connectionId}</Text>
         <Text>Players Answered: {this.state.playersAnswered}</Text>
