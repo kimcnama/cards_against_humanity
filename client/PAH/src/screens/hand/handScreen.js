@@ -43,6 +43,7 @@ class HandScreen extends Component {
       customAnswer: '',
       addAnswerToDB: '',
       customQuestion: '',
+      winningAnswer: '',
     };
     //Init WebSockets with Cognito Access Token
     this.client = new Sockette(wsURL, {
@@ -81,6 +82,7 @@ class HandScreen extends Component {
           return {
             ...this.state,
             playersAnswered: arrCopy,
+            answers: [],
           };
         });
         return;
@@ -100,6 +102,17 @@ class HandScreen extends Component {
         this.setState({
           ...this.state,
           serverMessage: body.message,
+        });
+        return;
+      case 'pushNewCardToUser':
+        console.log('recieving new card');
+        this.setState((state) => {
+          const arrCopy = state.answerCards.concat(body.card);
+          console.log('arrCopy', arrCopy);
+          return {
+            ...this.state,
+            answerCards: arrCopy,
+          };
         });
         return;
       case 'initialQuestion':
@@ -129,6 +142,8 @@ class HandScreen extends Component {
     this.setState({
       currentQuestion: body.nextQuestion,
       playersAndScores: body.scores,
+      answerReveal: false,
+      winningAnswer: body.winningAnswer,
     });
   }
 
@@ -357,6 +372,7 @@ class HandScreen extends Component {
         <Text>Conn ID: {this.state.connectionId}</Text>
         <Text>Players Answered: {this.state.playersAnswered}</Text>
         <Text>Server msg: {this.state.serverMessage}</Text>
+        <Text>Winning Answer: {this.state.winningAnswer}</Text>
         {this.state.answerReveal && this.mapAnswers()}
         {this.mapResults()}
       </View>
