@@ -25,8 +25,8 @@ class GameSetup extends React.Component {
   constructor() {
     super();
     this.state = {
-      groupName: 'phenibrutes',
-      roomName: '',
+      groupName: 'standard',
+      roomName: 'auto',
       playerName: '',
       errorText: '',
     };

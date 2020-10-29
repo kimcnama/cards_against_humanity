@@ -1,10 +1,12 @@
 import React, {Component} from 'react';
-import {View, StyleSheet, Button, Text} from 'react-native';
+import {View, StyleSheet, Button, Text, TextInput} from 'react-native';
 
 import {connect} from 'react-redux';
 import {addCard} from './../../actions/hand';
 
 import Sockette from 'sockette';
+
+import {formatText} from './../../shared/Utils';
 
 const mapStateToProps = (state) => {
   return {
@@ -38,6 +40,9 @@ class HandScreen extends Component {
       answerCards: [],
       currentQuestion: '',
       playersAndScores: [],
+      customAnswer: '',
+      addAnswerToDB: '',
+      customQuestion: '',
     };
     //Init WebSockets with Cognito Access Token
     this.client = new Sockette(wsURL, {
@@ -205,7 +210,7 @@ class HandScreen extends Component {
               )}
               title={answer.answer}
               key={i}
-              color="#841584"
+              color="blue"
             />
           );
         })}
@@ -227,9 +232,125 @@ class HandScreen extends Component {
     );
   }
 
+  onCustomAnswerChange(text) {
+    this.setState({
+      ...this.state,
+      customAnswer: formatText(text, true, true),
+    });
+  }
+
+  sendCustomAnswer() {
+    if (!this.state.customAnswer) {
+      console.log('no custom answer');
+      return;
+    }
+
+    this.client.json({
+      action: 'onAnswer',
+      answerToNextQuestion: true,
+      answer: this.state.customAnswer,
+      addToDB: true,
+      id: '',
+      roomName: this.props.roomName,
+      groupName: this.props.groupName,
+      playerName: this.props.playerName,
+    });
+
+    this.setState({
+      ...this.state,
+      customAnswer: '',
+    });
+  }
+
+  onAddAnswerToDBChange(text) {
+    this.setState({
+      ...this.state,
+      addAnswerToDB: formatText(text, true, true),
+    });
+  }
+
+  addAnswerToDB() {
+    if (!this.state.addAnswerToDB) {
+      console.log('no custom answer');
+      return;
+    }
+
+    this.client.json({
+      action: 'onAnswer',
+      answerToNextQuestion: false,
+      answer: this.state.addAnswerToDB,
+      addToDB: true,
+      id: '',
+      roomName: this.props.roomName,
+      groupName: this.props.groupName,
+      playerName: this.props.playerName,
+    });
+
+    this.setState({
+      ...this.state,
+      addAnswerToDB: '',
+    });
+  }
+
+  onCustomQuestionChange(text) {
+    this.setState({
+      ...this.state,
+      customQuestion: formatText(text, true, false),
+    });
+  }
+
+  sendCustomQuestion() {
+    if (!this.state.customQuestion) {
+      console.log('No question');
+      return;
+    }
+
+    this.client.json({
+      action: 'onPushNextQuestion',
+      question: this.state.customQuestion,
+      roomName: this.props.roomName,
+      groupName: this.props.groupName,
+    });
+
+    this.setState({
+      ...this.state,
+      customQuestion: '',
+    });
+  }
+
   render() {
     return (
       <View style={styles.conatiner}>
+        <TextInput
+          style={styles.textBox}
+          onChangeText={(text) => this.onCustomQuestionChange(text)}
+          value={this.state.customQuestion}
+        />
+        <Button
+          onPress={() => this.sendCustomQuestion()}
+          title="Send Custom Question"
+          color="#841584"
+        />
+        <TextInput
+          style={styles.textBox}
+          onChangeText={(text) => this.onCustomAnswerChange(text)}
+          value={this.state.customAnswer}
+        />
+        <Button
+          onPress={() => this.sendCustomAnswer()}
+          title="Send Custom Answer"
+          color="#841584"
+        />
+        <TextInput
+          style={styles.textBox}
+          onChangeText={(text) => this.onAddAnswerToDBChange(text)}
+          value={this.state.addAnswerToDB}
+        />
+        <Button
+          onPress={() => this.addAnswerToDB()}
+          title="Add Answer to DB"
+          color="#841584"
+        />
         <Text>Current Q: {this.state.currentQuestion}</Text>
         {this.mapAnswerCards()}
         <Text>Players: {this.state.playersInGame}</Text>
@@ -238,11 +359,6 @@ class HandScreen extends Component {
         <Text>Server msg: {this.state.serverMessage}</Text>
         {this.state.answerReveal && this.mapAnswers()}
         {this.mapResults()}
-        <Button
-          onPress={() => this.sendCustomAnswer()}
-          title="Send Custom Answer"
-          color="#841584"
-        />
       </View>
     );
   }
