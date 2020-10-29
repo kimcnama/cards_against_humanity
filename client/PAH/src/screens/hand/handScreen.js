@@ -34,6 +34,7 @@ class HandScreen extends Component {
       playersInGame: [],
       playersAnswered: [],
       connectionId: '',
+      roundHostId: '',
       serverMessage: '',
       answers: [],
       answerReveal: false,
@@ -44,6 +45,7 @@ class HandScreen extends Component {
       addAnswerToDB: '',
       customQuestion: '',
       winningAnswer: '',
+      answerSubmitted: false,
     };
     //Init WebSockets with Cognito Access Token
     this.client = new Sockette(wsURL, {
@@ -98,6 +100,12 @@ class HandScreen extends Component {
         console.log('round complete', body.body);
         this.resetRound(body.body);
         return;
+      case 'currentRoundHost':
+        this.setState({
+          ...this.state,
+          roundHostId: body.hostConnectionId,
+        });
+        return;
       case 'playerMessage':
         this.setState({
           ...this.state,
@@ -144,6 +152,7 @@ class HandScreen extends Component {
       playersAndScores: body.scores,
       answerReveal: false,
       winningAnswer: body.winningAnswer,
+      answerSubmitted: false,
     });
   }
 
@@ -174,6 +183,9 @@ class HandScreen extends Component {
   }
 
   selectAnswerCard(_answer, _id) {
+    if (this.state.answerSubmitted) {
+      return;
+    }
     this.client.json({
       action: 'onAnswer',
       answerToNextQuestion: true,
@@ -192,6 +204,7 @@ class HandScreen extends Component {
     this.setState({
       ...this.state,
       answerCards: answerHandCopy,
+      answerSubmitted: true,
     });
   }
 
@@ -199,14 +212,18 @@ class HandScreen extends Component {
     return (
       <View>
         {this.state.answers.map((answer, i) => {
-          return (
-            <Button
-              onPress={this.selectAnswer.bind(this, i)}
-              title={answer.answerStruct.answer}
-              key={i}
-              color="#841584"
-            />
-          );
+          if (this.state.roundHostId === this.state.connectionId) {
+            return (
+              <Button
+                onPress={this.selectAnswer.bind(this, i)}
+                title={answer.answerStruct.answer}
+                key={i}
+                color="#841584"
+              />
+            );
+          } else {
+            return <Text>{answer.answerStruct.answer}</Text>;
+          }
         })}
       </View>
     );
@@ -216,18 +233,22 @@ class HandScreen extends Component {
     return (
       <View>
         {this.state.answerCards.map((answer, i) => {
-          return (
-            <Button
-              onPress={this.selectAnswerCard.bind(
-                this,
-                answer.answer,
-                answer.id,
-              )}
-              title={answer.answer}
-              key={i}
-              color="blue"
-            />
-          );
+          if (this.state.roundHostId === this.state.connectionId) {
+            return <Text>Ans: {answer.answer}</Text>;
+          } else {
+            return (
+              <Button
+                onPress={this.selectAnswerCard.bind(
+                  this,
+                  answer.answer,
+                  answer.id,
+                )}
+                title={answer.answer}
+                key={i}
+                color="blue"
+              />
+            );
+          }
         })}
       </View>
     );
@@ -274,6 +295,7 @@ class HandScreen extends Component {
     this.setState({
       ...this.state,
       customAnswer: '',
+      answerSubmitted: true,
     });
   }
 
@@ -370,6 +392,7 @@ class HandScreen extends Component {
         {this.mapAnswerCards()}
         <Text>Players: {this.state.playersInGame}</Text>
         <Text>Conn ID: {this.state.connectionId}</Text>
+        <Text>Host ID: {this.state.roundHostId}</Text>
         <Text>Players Answered: {this.state.playersAnswered}</Text>
         <Text>Server msg: {this.state.serverMessage}</Text>
         <Text>Winning Answer: {this.state.winningAnswer}</Text>
