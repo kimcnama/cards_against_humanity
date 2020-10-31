@@ -56,6 +56,7 @@ class HandScreen extends Component {
       playersAnswered: [],
       connectionId: '',
       roundHostId: '',
+      roundHostName: '',
       isHost: false,
       serverMessage: '',
       answers: [],
@@ -87,11 +88,10 @@ class HandScreen extends Component {
   }
 
   parseOnMessage(event) {
-    console.log('body JSON msg', event);
     let body = JSON.parse(event.data);
+    console.log('json msg: ', body);
     switch (body.eventType) {
       case 'activePlayers':
-        console.log('active players', body.players);
         this.setState({
           ...this.state,
           playersInGame: body.players,
@@ -104,10 +104,8 @@ class HandScreen extends Component {
         });
         return;
       case 'playerAnswered':
-        console.log('player answered: ', body.player);
         this.setState((state) => {
           const arrCopy = state.playersAnswered.concat(body.player);
-          console.log('arrCopy', arrCopy);
           return {
             ...this.state,
             playersAnswered: arrCopy,
@@ -125,13 +123,22 @@ class HandScreen extends Component {
         return;
       case 'selectionRoundComplete':
         console.log('round complete', body.body);
-        this.resetRound(body.body);
+        let jsonBody = body.body;
+        this.setState({
+          currentQuestion: jsonBody.nextQuestion,
+          playersAndScores: jsonBody.scores,
+          answerReveal: false,
+          winningAnswer: jsonBody.winningAnswer,
+          answerSubmitted: false,
+          roundHostName: jsonBody.winner,
+        });
         return;
       case 'currentRoundHost':
         this.setState({
           ...this.state,
           roundHostId: body.hostConnectionId,
           isHost: body.hostConnectionId === this.state.connectionId,
+          roundHostName: body.hostName,
         });
         return;
       case 'playerMessage':
@@ -141,10 +148,8 @@ class HandScreen extends Component {
         });
         return;
       case 'pushNewCardToUser':
-        console.log('recieving new card');
         this.setState((state) => {
           const arrCopy = state.answerCards.concat(body.card);
-          console.log('arrCopy', arrCopy);
           return {
             ...this.state,
             answerCards: arrCopy,
@@ -152,14 +157,12 @@ class HandScreen extends Component {
         });
         return;
       case 'initialQuestion':
-        console.log('init question', body.question);
         this.setState({
           ...this.state,
           currentQuestion: body.question,
         });
         return;
       case 'initialAnswerCards':
-        console.log('initialAnswerCards', body.answers);
         this.setState({
           ...this.state,
           answerCards: body.answers,
@@ -172,16 +175,6 @@ class HandScreen extends Component {
         console.log('unknown event', body);
         return;
     }
-  }
-
-  resetRound(body) {
-    this.setState({
-      currentQuestion: body.nextQuestion,
-      playersAndScores: body.scores,
-      answerReveal: false,
-      winningAnswer: body.winningAnswer,
-      answerSubmitted: false,
-    });
   }
 
   onWssOpen(event) {
@@ -305,63 +298,28 @@ class HandScreen extends Component {
     );
   };
 
-  mapActivePlayersIfAnswered() {
-    this.state.playersInGame.map((player) => {
-      console.log('player', player);
-      if (player === this.props.playerName) {
-        return null;
-      }
-      var imgSource = this.state.playersAnswered.includes(player)
-        ? require('./../../../assets/check.png')
-        : require('./../../../assets/cancel.png');
-      return (
-        // <View
-        //   style={{
-        //     width: width * 0.8,
-        //     flexDirection: 'row',
-        //     justifyContent: 'space-between',
-        //   }}>
-        //   <Text style={styles.questionText}>{player}</Text>
-        //   <View style={{height: 22, width: 22}}>
-        //     <Image
-        //       style={{height: 22, width: 22}}
-        //       resizeMode="contain"
-        //       source={imgSource}
-        //     />
-        //   </View>
-        // </View>
-        <Text>{player}</Text>
-      );
-    });
-  }
-
   submitAnswerStageWaitingPlayers() {
     return (
       <View style={{width: width, alignItems: 'center'}}>
         <View style={styles.waitingPlayersView}>
-          <Text style={styles.instructionText}>
-            Please wait for all players to answer!
-          </Text>
+          <View style={{height: height * 0.1}}>
+            <Text style={styles.instructionText}>
+              Please wait for all players to answer!
+            </Text>
+          </View>
           <Text style={styles.questionText}>Players Answered:</Text>
-          <ScrollView
-            contentContainerStyle={{flexGrow: 1, justifyContent: 'center'}}>
+          <ScrollView contentContainerStyle={styles.middleScrollView}>
             {this.state.playersInGame.map((player) => {
-              console.log('player', player);
-              if (player === this.props.playerName) {
-                return null;
-              }
               var imgSource = this.state.playersAnswered.includes(player)
                 ? require('./../../../assets/check.png')
                 : require('./../../../assets/cancel.png');
+              if (this.state.roundHostName === player) {
+                imgSource = require('./../../../assets/crowns.png');
+              }
               return (
-                <View
-                  style={{
-                    width: width * 0.8,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                  }}>
+                <View style={styles.resultsTextView}>
                   <Text style={styles.questionText}>{player}</Text>
-                  <View style={{height: 22, width: 22}}>
+                  <View style={{height: 22, width: 22, paddingTop: 10}}>
                     <Image
                       style={{height: 22, width: 22}}
                       resizeMode="contain"
@@ -391,12 +349,11 @@ class HandScreen extends Component {
 
   submitAnswerStageNotHost() {
     return (
-      <View style={{width: width, alignItems: 'center'}}>
-        <SafeAreaView>
+      <SafeAreaView>
+        <View style={{width: width, alignItems: 'center'}}>
           <View style={styles.cardViewUpper}>
             <Text style={styles.instructionText}>Please submit an answer!</Text>
-            <ScrollView
-              contentContainerStyle={{flexGrow: 1, justifyContent: 'center'}}>
+            <ScrollView contentContainerStyle={styles.middleScrollView}>
               <Text style={styles.questionText}>
                 Q: {this.state.currentQuestion}
               </Text>
@@ -428,8 +385,8 @@ class HandScreen extends Component {
               {this.addQuestionAnswerView()}
             </View>
           </View>
-        </SafeAreaView>
-      </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -456,7 +413,6 @@ class HandScreen extends Component {
 
   sendCustomAnswer() {
     if (!this.state.customAnswer) {
-      console.log('no custom answer');
       return;
     }
 
@@ -487,7 +443,6 @@ class HandScreen extends Component {
 
   addAnswerToDB() {
     if (!this.state.addAnswerToDB) {
-      console.log('no custom answer');
       return;
     }
 
@@ -517,7 +472,6 @@ class HandScreen extends Component {
 
   sendCustomQuestion() {
     if (!this.state.customQuestion) {
-      console.log('No question');
       return;
     }
 
@@ -644,5 +598,13 @@ const styles = StyleSheet.create({
     height: height * 0.75,
     alignItems: 'center',
     justifyContent: 'space-around',
+    paddingTop: 10,
+  },
+  middleScrollView: {flexGrow: 1, justifyContent: 'center'},
+  resultsTextView: {
+    width: width * 0.8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    height: 40,
   },
 });
