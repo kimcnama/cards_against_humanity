@@ -1,5 +1,15 @@
 import React, {Component} from 'react';
-import {View, StyleSheet, Button, Text, TextInput} from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Button,
+  Text,
+  ScrollView,
+  Dimensions,
+  SafeAreaView,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
 
 import {connect} from 'react-redux';
 import {addCard} from './../../actions/hand';
@@ -7,6 +17,11 @@ import {addCard} from './../../actions/hand';
 import Sockette from 'sockette';
 
 import {formatText} from './../../shared/Utils';
+import Carousel from 'react-native-snap-carousel';
+
+const proceedGreen = '#88E08C';
+const proceedRed = '#FF7474';
+const proceedBlue = '#A5BEFF';
 
 const mapStateToProps = (state) => {
   return {
@@ -22,8 +37,14 @@ const mapDispatchToProps = (dispatch) => {
   };
 };
 
+const {width, height} = Dimensions.get('window');
+
 const wsURL =
   'wss://7fzsgk085d.execute-api.eu-west-1.amazonaws.com/development';
+
+const ANSWER_SUBMISSION_STAGE = 'ANSWER_SUBMISSION_STAGE';
+const ANSWER_SELECTION_STAGE = 'ANSWER_SELECTION_STAGE';
+const RESULTS_STAGE = 'RESULTS_STAGE';
 
 class HandScreen extends Component {
   constructor() {
@@ -35,6 +56,7 @@ class HandScreen extends Component {
       playersAnswered: [],
       connectionId: '',
       roundHostId: '',
+      isHost: false,
       serverMessage: '',
       answers: [],
       answerReveal: false,
@@ -46,6 +68,10 @@ class HandScreen extends Component {
       customQuestion: '',
       winningAnswer: '',
       answerSubmitted: false,
+      activeAnswerCardIndex: 0,
+      showAddQuestionModal: false,
+      showAddAnswerModal: false,
+      roundStage: ANSWER_SUBMISSION_STAGE,
     };
     //Init WebSockets with Cognito Access Token
     this.client = new Sockette(wsURL, {
@@ -78,6 +104,7 @@ class HandScreen extends Component {
         });
         return;
       case 'playerAnswered':
+        console.log('player answered: ', body.player);
         this.setState((state) => {
           const arrCopy = state.playersAnswered.concat(body.player);
           console.log('arrCopy', arrCopy);
@@ -104,6 +131,7 @@ class HandScreen extends Component {
         this.setState({
           ...this.state,
           roundHostId: body.hostConnectionId,
+          isHost: body.hostConnectionId === this.state.connectionId,
         });
         return;
       case 'playerMessage':
@@ -182,10 +210,17 @@ class HandScreen extends Component {
     });
   }
 
-  selectAnswerCard(_answer, _id) {
+  selectAnswerCard() {
     if (this.state.answerSubmitted) {
       return;
     }
+
+    let _answer = this.state.answerCards[this.state.activeAnswerCardIndex]
+      .answer;
+    let _id = this.state.answerCards[this.state.activeAnswerCardIndex].id;
+
+    console.log('selected answer: ' + _answer);
+
     this.client.json({
       action: 'onAnswer',
       answerToNextQuestion: true,
@@ -222,34 +257,178 @@ class HandScreen extends Component {
               />
             );
           } else {
-            return <Text>{answer.answerStruct.answer}</Text>;
+            return (
+              <Text style={styles.smallText}>{answer.answerStruct.answer}</Text>
+            );
           }
         })}
       </View>
     );
   }
 
-  mapAnswerCards() {
+  addQuestionAnswerView() {
     return (
-      <View>
-        {this.state.answerCards.map((answer, i) => {
-          if (this.state.roundHostId === this.state.connectionId) {
-            return <Text>Ans: {answer.answer}</Text>;
-          } else {
-            return (
-              <Button
-                onPress={this.selectAnswerCard.bind(
-                  this,
-                  answer.answer,
-                  answer.id,
-                )}
-                title={answer.answer}
-                key={i}
-                color="blue"
-              />
-            );
-          }
-        })}
+      <View style={styles.questionAnswerView}>
+        <TouchableOpacity
+          style={styles.imageIconButtonView}
+          onPress={() =>
+            this.setState({...this.state, showAddQuestionModal: true})
+          }>
+          <Image
+            style={styles.iconImageSz}
+            resizeMode="contain"
+            source={require('./../../../assets/addQuestion.png')}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.imageIconButtonView}
+          onPress={() =>
+            this.setState({...this.state, showAddAnswerModal: true})
+          }>
+          <Image
+            style={styles.iconImageSz}
+            resizeMode="contain"
+            source={require('./../../../assets/addAnswer.png')}
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  _renderAnswerCard = ({item, index}) => {
+    return (
+      <View style={styles.card}>
+        <ScrollView>
+          <Text style={styles.cardText}>A: {item.answer}</Text>
+        </ScrollView>
+      </View>
+    );
+  };
+
+  mapActivePlayersIfAnswered() {
+    this.state.playersInGame.map((player) => {
+      console.log('player', player);
+      if (player === this.props.playerName) {
+        return null;
+      }
+      var imgSource = this.state.playersAnswered.includes(player)
+        ? require('./../../../assets/check.png')
+        : require('./../../../assets/cancel.png');
+      return (
+        // <View
+        //   style={{
+        //     width: width * 0.8,
+        //     flexDirection: 'row',
+        //     justifyContent: 'space-between',
+        //   }}>
+        //   <Text style={styles.questionText}>{player}</Text>
+        //   <View style={{height: 22, width: 22}}>
+        //     <Image
+        //       style={{height: 22, width: 22}}
+        //       resizeMode="contain"
+        //       source={imgSource}
+        //     />
+        //   </View>
+        // </View>
+        <Text>{player}</Text>
+      );
+    });
+  }
+
+  submitAnswerStageWaitingPlayers() {
+    return (
+      <View style={{width: width, alignItems: 'center'}}>
+        <View style={styles.waitingPlayersView}>
+          <Text style={styles.instructionText}>
+            Please wait for all players to answer!
+          </Text>
+          <Text style={styles.questionText}>Players Answered:</Text>
+          <ScrollView
+            contentContainerStyle={{flexGrow: 1, justifyContent: 'center'}}>
+            {this.state.playersInGame.map((player) => {
+              console.log('player', player);
+              if (player === this.props.playerName) {
+                return null;
+              }
+              var imgSource = this.state.playersAnswered.includes(player)
+                ? require('./../../../assets/check.png')
+                : require('./../../../assets/cancel.png');
+              return (
+                <View
+                  style={{
+                    width: width * 0.8,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                  }}>
+                  <Text style={styles.questionText}>{player}</Text>
+                  <View style={{height: 22, width: 22}}>
+                    <Image
+                      style={{height: 22, width: 22}}
+                      resizeMode="contain"
+                      source={imgSource}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.buttonArea}>
+          <TouchableOpacity
+            style={{
+              ...styles.proceedButton,
+              backgroundColor: proceedRed,
+            }}
+            onPress={() => this.selectAnswerCard()}>
+            <Text style={styles.proceedButtonText}>Force next round stage</Text>
+          </TouchableOpacity>
+          {this.addQuestionAnswerView()}
+        </View>
+      </View>
+    );
+  }
+
+  submitAnswerStageNotHost() {
+    return (
+      <View style={{width: width, alignItems: 'center'}}>
+        <SafeAreaView>
+          <View style={styles.cardViewUpper}>
+            <Text style={styles.instructionText}>Please submit an answer!</Text>
+            <ScrollView
+              contentContainerStyle={{flexGrow: 1, justifyContent: 'center'}}>
+              <Text style={styles.questionText}>
+                Q: {this.state.currentQuestion}
+              </Text>
+            </ScrollView>
+          </View>
+          <View style={styles.cardViewLower}>
+            <Carousel
+              ref={(c) => {
+                this._carousel = c;
+              }}
+              layout="default"
+              data={this.state.answerCards}
+              renderItem={this._renderAnswerCard}
+              sliderWidth={width}
+              itemWidth={width * 0.7}
+              onSnapToItem={(index) => {
+                this.setState({activeAnswerCardIndex: index});
+              }}
+            />
+            <View style={styles.buttonArea}>
+              <TouchableOpacity
+                style={{
+                  ...styles.proceedButton,
+                  backgroundColor: proceedGreen,
+                }}
+                onPress={() => this.selectAnswerCard()}>
+                <Text style={styles.proceedButtonText}>Submit this answer</Text>
+              </TouchableOpacity>
+              {this.addQuestionAnswerView()}
+            </View>
+          </View>
+        </SafeAreaView>
       </View>
     );
   }
@@ -259,7 +438,7 @@ class HandScreen extends Component {
       <View>
         {this.state.playersAndScores.map((result) => {
           return (
-            <Text>
+            <Text style={styles.smallText}>
               {result.playerName}:{result.playerWins} wins
             </Text>
           );
@@ -358,46 +537,15 @@ class HandScreen extends Component {
   render() {
     return (
       <View style={styles.conatiner}>
-        <TextInput
-          style={styles.textBox}
-          onChangeText={(text) => this.onCustomQuestionChange(text)}
-          value={this.state.customQuestion}
-        />
-        <Button
-          onPress={() => this.sendCustomQuestion()}
-          title="Send Custom Question"
-          color="#841584"
-        />
-        <TextInput
-          style={styles.textBox}
-          onChangeText={(text) => this.onCustomAnswerChange(text)}
-          value={this.state.customAnswer}
-        />
-        <Button
-          onPress={() => this.sendCustomAnswer()}
-          title="Send Custom Answer"
-          color="#841584"
-        />
-        <TextInput
-          style={styles.textBox}
-          onChangeText={(text) => this.onAddAnswerToDBChange(text)}
-          value={this.state.addAnswerToDB}
-        />
-        <Button
-          onPress={() => this.addAnswerToDB()}
-          title="Add Answer to DB"
-          color="#841584"
-        />
-        <Text>Current Q: {this.state.currentQuestion}</Text>
-        {this.mapAnswerCards()}
-        <Text>Players: {this.state.playersInGame}</Text>
-        <Text>Conn ID: {this.state.connectionId}</Text>
-        <Text>Host ID: {this.state.roundHostId}</Text>
-        <Text>Players Answered: {this.state.playersAnswered}</Text>
-        <Text>Server msg: {this.state.serverMessage}</Text>
-        <Text>Winning Answer: {this.state.winningAnswer}</Text>
-        {this.state.answerReveal && this.mapAnswers()}
-        {this.mapResults()}
+        <SafeAreaView>
+          {this.state.roundStage === ANSWER_SUBMISSION_STAGE &&
+            !this.state.answerSubmitted &&
+            !this.state.isHost &&
+            this.submitAnswerStageNotHost()}
+          {this.state.roundStage === ANSWER_SUBMISSION_STAGE &&
+            (this.state.isHost || this.state.answerSubmitted) &&
+            this.submitAnswerStageWaitingPlayers()}
+        </SafeAreaView>
       </View>
     );
   }
@@ -411,11 +559,90 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#272727',
+  },
+  cardViewUpper: {
+    height: '35%',
+    width: '90%',
+    alignItems: 'center',
+  },
+  cardViewLower: {
+    height: '65%',
+    width: '100%',
+  },
+  card: {
+    width: '100%',
+    height: height * 0.35,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    backgroundColor: 'white',
+    borderRadius: 20,
+  },
+  cardText: {
+    fontSize: 20,
+    color: 'black',
+    fontWeight: '500',
+  },
+  proceedButton: {
+    height: 50,
+    width: width * 0.9,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proceedButtonText: {
+    color: 'black',
+    fontSize: 20,
+    fontWeight: '500',
+  },
+  buttonArea: {
+    height: height * 0.2,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    width: width,
   },
   textBox: {
     height: 40,
     borderColor: 'gray',
     borderWidth: 1,
     width: 200,
+  },
+  smallText: {
+    fontSize: 14,
+    color: 'white',
+  },
+  questionText: {
+    fontSize: 22,
+    color: 'white',
+    fontWeight: '500',
+  },
+  instructionText: {
+    fontSize: 18,
+    color: 'white',
+    fontWeight: '500',
+  },
+  questionAnswerView: {
+    width: width * 0.95,
+    height: height * 0.1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  imageIconButtonView: {
+    height: height * 0.1,
+    width: height * 0.1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  iconImageSz: {
+    width: height * 0.1,
+    height: height * 0.1,
+  },
+  waitingPlayersView: {
+    height: height * 0.75,
+    alignItems: 'center',
+    justifyContent: 'space-around',
   },
 });
