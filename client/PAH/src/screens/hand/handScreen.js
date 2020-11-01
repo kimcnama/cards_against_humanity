@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
 
 import {connect} from 'react-redux';
@@ -75,6 +76,7 @@ class HandScreen extends Component {
       showAddAnswerModal: false,
       roundStage: ANSWER_SUBMISSION_STAGE,
       previousQuestion: '',
+      canForceNextRound: true,
     };
     //Init WebSockets with Cognito Access Token
     this.client = new Sockette(wsURL, {
@@ -116,23 +118,31 @@ class HandScreen extends Component {
         });
         return;
       case 'submissionRoundComplete':
+        let nextRoundStage =
+          body.answers.length > 0
+            ? ANSWER_SELECTION_STAGE
+            : RESULTS_STAGE_SCOREBOARD;
         this.setState({
           answers: body.answers,
           playersAnswered: [],
           serverMessage: '',
-          roundStage: ANSWER_SELECTION_STAGE,
+          roundStage: nextRoundStage,
         });
         return;
       case 'selectionRoundComplete':
         console.log('round complete', body.body);
         let jsonBody = body.body;
         let prevQ = this.state.currentQuestion;
+        let nextRoundStageSelection =
+          jsonBody.forceNextRound === false
+            ? RESULTS_STAGE_ANSWER_REVEAL
+            : RESULTS_STAGE_SCOREBOARD;
         this.setState({
           currentQuestion: jsonBody.nextQuestion,
           playersAndScores: jsonBody.scores,
           winningAnswer: jsonBody.winningAnswer,
           answerSubmitted: false,
-          roundStage: RESULTS_STAGE_ANSWER_REVEAL,
+          roundStage: nextRoundStageSelection,
           previousQuestion: prevQ,
         });
         return;
@@ -143,6 +153,9 @@ class HandScreen extends Component {
           isHost: body.hostConnectionId === this.state.connectionId,
           roundHostName: body.hostName,
         });
+        if (body.forcedNextRound === true) {
+          this.setState({roundStage: RESULTS_STAGE_SCOREBOARD});
+        }
         return;
       case 'playerMessage':
         this.setState({
@@ -170,6 +183,9 @@ class HandScreen extends Component {
           ...this.state,
           answerCards: body.answers,
         });
+        return;
+      case 'roundLenTimeLeft':
+        this.sendTimeLeftAlert(body.secs);
         return;
       case 'error':
         console.log('error message', body);
@@ -207,6 +223,7 @@ class HandScreen extends Component {
       roomName: this.props.roomName,
       groupName: this.props.groupName,
       playerName: this.props.playerName,
+      forceNextRound: false,
     });
 
     var answerHandCopy = this.state.answerCards.filter(
@@ -242,6 +259,30 @@ class HandScreen extends Component {
         })}
       </View>
     );
+  }
+
+  sendTimeLeftAlert(secs) {
+    Alert.alert(
+      'Warning!',
+      'You must wait ' +
+        String(secs) +
+        ' seconds until you can skip round stage',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => console.log('Cancel Pressed'),
+          style: 'cancel',
+        },
+        {
+          text: 'OK',
+          onPress: () => {
+            console.log('OK Pressed');
+          },
+        },
+      ],
+      {cancelable: false},
+    );
+    this.setState({canForceNextRound: true});
   }
 
   addQuestionAnswerView() {
@@ -323,7 +364,7 @@ class HandScreen extends Component {
               ...styles.proceedButton,
               backgroundColor: proceedRed,
             }}
-            onPress={() => this.selectAnswerCard()}>
+            onPress={() => this.forceNextRoundAnswerSubmission()}>
             <Text style={styles.proceedButtonText}>Force next round stage</Text>
           </TouchableOpacity>
           {this.addQuestionAnswerView()}
@@ -525,6 +566,7 @@ class HandScreen extends Component {
       winnerConnectionId: selectedAns.connectionId,
       roomName: this.props.roomName,
       groupName: this.props.groupName,
+      forceNextRound: false,
     });
 
     this.setState({
@@ -534,7 +576,43 @@ class HandScreen extends Component {
     });
   }
 
-  forceNextRoundAnswerPick() {}
+  forceNextRoundAnswerPick() {
+    this.client.json({
+      action: 'onSelectAnswer',
+      winnerConnectionId: '',
+      roomName: this.props.roomName,
+      groupName: this.props.groupName,
+      forceNextRound: true,
+    });
+
+    this.setState({
+      ...this.state,
+      answers: [],
+      activeSelectedSubmissionCardIndex: 0,
+      canForceNextRound: false,
+    });
+  }
+
+  forceNextRoundAnswerSubmission() {
+    this.client.json({
+      action: 'onAnswer',
+      answerToNextQuestion: true,
+      answer: '',
+      addToDB: false,
+      id: '',
+      roomName: this.props.roomName,
+      groupName: this.props.groupName,
+      playerName: this.props.playerName,
+      forceNextRound: true,
+    });
+
+    this.setState({
+      ...this.state,
+      customAnswer: '',
+      answerSubmitted: true,
+      canForceNextRound: false,
+    });
+  }
 
   mapAnswerSubmissions() {
     let instructionText = this.state.isHost
@@ -617,6 +695,7 @@ class HandScreen extends Component {
       roomName: this.props.roomName,
       groupName: this.props.groupName,
       playerName: this.props.playerName,
+      forceNextRound: false,
     });
 
     this.setState({
@@ -647,6 +726,7 @@ class HandScreen extends Component {
       roomName: this.props.roomName,
       groupName: this.props.groupName,
       playerName: this.props.playerName,
+      forceNextRound: false,
     });
 
     this.setState({
