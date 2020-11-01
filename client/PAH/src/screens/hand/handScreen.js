@@ -10,6 +10,10 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Modal,
+  TextInput,
+  Keyboard,
+  Switch,
 } from 'react-native';
 
 import {connect} from 'react-redux';
@@ -23,6 +27,14 @@ import Carousel from 'react-native-snap-carousel';
 const proceedGreen = '#88E08C';
 const proceedRed = '#FF7474';
 const proceedBlue = '#A5BEFF';
+
+const modalBlue = '#257CFF';
+const modalRed = '#FC5638';
+
+const questionModalStaticText =
+  'If you want to add your own question, it will join the queue of custom questions up next. Questions will be added to database and put into question deck, so please check spelling.';
+const answerModalStaticText =
+  'You can add custom answers here. Answers are added to the answer deck database so please check spelling.';
 
 const mapStateToProps = (state) => {
   return {
@@ -73,7 +85,10 @@ class HandScreen extends Component {
       activeAnswerCardIndex: 0,
       activeSelectedSubmissionCardIndex: 0,
       showAddQuestionModal: false,
+      questionModalText: '',
+      answerModalText: '',
       showAddAnswerModal: false,
+      isAnswerToNextQuestionSlider: true,
       roundStage: ANSWER_SUBMISSION_STAGE,
       previousQuestion: '',
       canForceNextRound: true,
@@ -144,6 +159,7 @@ class HandScreen extends Component {
           answerSubmitted: false,
           roundStage: nextRoundStageSelection,
           previousQuestion: prevQ,
+          isAnswerToNextQuestionSlider: true,
         });
         return;
       case 'currentRoundHost':
@@ -235,6 +251,7 @@ class HandScreen extends Component {
       answerCards: answerHandCopy,
       answerSubmitted: true,
       activeAnswerCardIndex: 0,
+      isAnswerToNextQuestionSlider: false,
     });
   }
 
@@ -291,7 +308,11 @@ class HandScreen extends Component {
         <TouchableOpacity
           style={styles.imageIconButtonView}
           onPress={() =>
-            this.setState({...this.state, showAddQuestionModal: true})
+            this.setState({
+              ...this.state,
+              showAddQuestionModal: true,
+              showAddAnswerModal: false,
+            })
           }>
           <Image
             style={styles.iconImageSz}
@@ -302,7 +323,11 @@ class HandScreen extends Component {
         <TouchableOpacity
           style={styles.imageIconButtonView}
           onPress={() =>
-            this.setState({...this.state, showAddAnswerModal: true})
+            this.setState({
+              ...this.state,
+              showAddQuestionModal: false,
+              showAddAnswerModal: true,
+            })
           }>
           <Image
             style={styles.iconImageSz}
@@ -469,7 +494,7 @@ class HandScreen extends Component {
                 </View>
                 <View style={{height: 30}} />
                 <View style={styles.winnerText}>
-                <Text
+                  <Text
                     style={{
                       ...styles.bestAnswerText,
                       textDecorationLine: 'underline',
@@ -611,6 +636,7 @@ class HandScreen extends Component {
       customAnswer: '',
       answerSubmitted: true,
       canForceNextRound: false,
+      isAnswerToNextQuestionSlider: true,
     });
   }
 
@@ -675,6 +701,10 @@ class HandScreen extends Component {
   }
 
   onCustomAnswerChange(text) {
+    if (text.includes('\n')) {
+      text = text.replace('\n', '');
+      Keyboard.dismiss();
+    }
     this.setState({
       ...this.state,
       customAnswer: formatText(text, true, true),
@@ -688,7 +718,7 @@ class HandScreen extends Component {
 
     this.client.json({
       action: 'onAnswer',
-      answerToNextQuestion: true,
+      answerToNextQuestion: this.state.isAnswerToNextQuestionSlider,
       answer: this.state.customAnswer,
       addToDB: true,
       id: '',
@@ -702,13 +732,6 @@ class HandScreen extends Component {
       ...this.state,
       customAnswer: '',
       answerSubmitted: true,
-    });
-  }
-
-  onAddAnswerToDBChange(text) {
-    this.setState({
-      ...this.state,
-      addAnswerToDB: formatText(text, true, true),
     });
   }
 
@@ -736,6 +759,10 @@ class HandScreen extends Component {
   }
 
   onCustomQuestionChange(text) {
+    if (text.includes('\n')) {
+      text = text.replace('\n', '');
+      Keyboard.dismiss();
+    }
     this.setState({
       ...this.state,
       customQuestion: formatText(text, true, false),
@@ -757,7 +784,174 @@ class HandScreen extends Component {
     this.setState({
       ...this.state,
       customQuestion: '',
+      showAddAnswerModal: false,
+      showAddQuestionModal: false,
     });
+  }
+
+  closeModals() {
+    this.setState({
+      showAddQuestionModal: false,
+      showAddAnswerModal: false,
+      customQuestion: '',
+      customAnswer: '',
+    });
+  }
+
+  questionModal() {
+    return (
+      <Modal
+        visible={this.state.showAddQuestionModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => this.closeModals()}>
+        <SafeAreaView>
+          <View
+            style={{
+              ...styles.conatiner,
+              backgroundColor: 'transparent',
+              justifyContent: 'flex-start',
+            }}>
+            <View
+              style={{...styles.modalContainer, backgroundColor: modalBlue}}>
+              <View style={styles.innerModal}>
+                <Text style={styles.headingText}>
+                  Add question to question queue
+                </Text>
+                <View style={{width: '100%'}}>
+                  <Text style={styles.questionText}>Question:</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    onChangeText={(text) => this.onCustomQuestionChange(text)}
+                    value={this.state.customQuestion}
+                    multiline={true}
+                    returnKeyType="done"
+                  />
+                  <View style={{height: 10}}/>
+                  <Text style={styles.smallModalText}>
+                    {questionModalStaticText}
+                  </Text>
+                  <View style={{height: 10}}/>
+                  <TouchableOpacity
+                    style={{
+                      ...styles.proceedButton,
+                      backgroundColor: 'white',
+                      width: '100%',
+                    }}
+                    onPress={() => this.sendCustomQuestion()}>
+                    <Text
+                      style={{...styles.proceedButtonText, color: modalBlue}}>
+                      Submit this question
+                    </Text>
+                  </TouchableOpacity>
+                  <View style={{height: 10}}/>
+                  <TouchableOpacity
+                    style={{
+                      ...styles.proceedButton,
+                      backgroundColor: 'white',
+                      width: '100%',
+                    }}
+                    onPress={() => this.closeModals()}>
+                    <Text style={{...styles.proceedButtonText}}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
+  toggleAnswerToNextQSlider() {
+    if (!this.state.isAnswerToNextQuestionSlider) {
+      if (!this.state.answerSubmitted) {
+        this.setState({isAnswerToNextQuestionSlider: true});
+      }
+    } else {
+      this.setState({isAnswerToNextQuestionSlider: false});
+    }
+  }
+
+  answerModal() {
+    return (
+      <Modal
+        visible={this.state.showAddAnswerModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => this.closeModals()}>
+        <SafeAreaView>
+          <View
+            style={{
+              ...styles.conatiner,
+              backgroundColor: 'transparent',
+              justifyContent: 'flex-start',
+            }}>
+            <View
+              style={{...styles.modalContainer, backgroundColor: modalRed}}>
+              <View style={styles.innerModal}>
+                <Text style={styles.headingText}>Add Custom Answer</Text>
+                <View style={{width: '100%'}}>
+                  <Text style={styles.questionText}>Answer:</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    onChangeText={(text) => this.onCustomAnswerChange(text)}
+                    value={this.state.customAnswer}
+                    multiline={true}
+                    returnKeyType="done"
+                  />
+                  <View style={{height: 10}}/>
+                  <Text style={styles.smallModalText}>
+                    {answerModalStaticText}
+                  </Text>
+                  <View style={{height: 10}}/>
+                  <View
+                    style={{
+                      width: '100%',
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                    }}>
+                    <Text style={styles.questionText}>
+                      Answer to current Q:
+                    </Text>
+                    <Switch
+                      trackColor={{false: '#767577', true: '#6BD55D'}}
+                      thumbColor={'white'}
+                      ios_backgroundColor="#3e3e3e"
+                      onValueChange={() => this.toggleAnswerToNextQSlider()}
+                      value={this.state.isAnswerToNextQuestionSlider}
+                    />
+                  </View>
+                  <View style={{height: 10}}/>
+                  <TouchableOpacity
+                    style={{
+                      ...styles.proceedButton,
+                      backgroundColor: 'white',
+                      width: '100%',
+                    }}
+                    onPress={() => this.sendCustomAnswer()}>
+                    <Text
+                      style={{...styles.proceedButtonText, color: modalRed}}>
+                      Submit this answer
+                    </Text>
+                  </TouchableOpacity>
+                  <View style={{height: 10}}/>
+                  <TouchableOpacity
+                    style={{
+                      ...styles.proceedButton,
+                      backgroundColor: 'white',
+                      width: '100%',
+                    }}
+                    onPress={() => this.closeModals()}>
+                    <Text style={{...styles.proceedButtonText}}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
   }
 
   render() {
@@ -777,6 +971,8 @@ class HandScreen extends Component {
             this.winningAnswerView()}
           {this.state.roundStage === RESULTS_STAGE_SCOREBOARD &&
             this.scoreBoardView()}
+          {this.state.showAddQuestionModal && this.questionModal()}
+          {this.state.showAddAnswerModal && this.answerModal()}
         </SafeAreaView>
       </View>
     );
@@ -849,6 +1045,18 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '500',
   },
+  smallModalText: {
+    fontSize: 18,
+    color: 'white',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  headingText: {
+    fontSize: 28,
+    color: 'white',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   bestAnswerText: {
     fontSize: 22,
     color: proceedGreen,
@@ -896,5 +1104,21 @@ const styles = StyleSheet.create({
     width: '90%',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalContainer: {
+    width: width * 0.9,
+    borderRadius: 20,
+  },
+  innerModal: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  textInput: {
+    height: height * 0.3,
+    borderColor: 'gray',
+    borderWidth: 1,
+    backgroundColor: 'white',
+    borderRadius: 10,
   },
 });
