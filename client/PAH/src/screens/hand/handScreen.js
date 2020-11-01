@@ -44,7 +44,8 @@ const wsURL =
 
 const ANSWER_SUBMISSION_STAGE = 'ANSWER_SUBMISSION_STAGE';
 const ANSWER_SELECTION_STAGE = 'ANSWER_SELECTION_STAGE';
-const RESULTS_STAGE = 'RESULTS_STAGE';
+const RESULTS_STAGE_ANSWER_REVEAL = 'RESULTS_STAGE_ANSWER_REVEAL';
+const RESULTS_STAGE_SCOREBOARD = 'RESULTS_STAGE_SCOREBOARD';
 
 class HandScreen extends Component {
   constructor() {
@@ -60,7 +61,6 @@ class HandScreen extends Component {
       isHost: false,
       serverMessage: '',
       answers: [],
-      answerReveal: false,
       answerCards: [],
       currentQuestion: '',
       playersAndScores: [],
@@ -70,9 +70,11 @@ class HandScreen extends Component {
       winningAnswer: '',
       answerSubmitted: false,
       activeAnswerCardIndex: 0,
+      activeSelectedSubmissionCardIndex: 0,
       showAddQuestionModal: false,
       showAddAnswerModal: false,
       roundStage: ANSWER_SUBMISSION_STAGE,
+      previousQuestion: '',
     };
     //Init WebSockets with Cognito Access Token
     this.client = new Sockette(wsURL, {
@@ -116,21 +118,22 @@ class HandScreen extends Component {
       case 'submissionRoundComplete':
         this.setState({
           answers: body.answers,
-          answerReveal: true,
           playersAnswered: [],
           serverMessage: '',
+          roundStage: ANSWER_SELECTION_STAGE,
         });
         return;
       case 'selectionRoundComplete':
         console.log('round complete', body.body);
         let jsonBody = body.body;
+        let prevQ = this.state.currentQuestion;
         this.setState({
           currentQuestion: jsonBody.nextQuestion,
           playersAndScores: jsonBody.scores,
-          answerReveal: false,
           winningAnswer: jsonBody.winningAnswer,
           answerSubmitted: false,
-          roundHostName: jsonBody.winner,
+          roundStage: RESULTS_STAGE_ANSWER_REVEAL,
+          previousQuestion: prevQ,
         });
         return;
       case 'currentRoundHost':
@@ -186,23 +189,6 @@ class HandScreen extends Component {
     });
   }
 
-  selectAnswer(index) {
-    let selectedAns = this.state.answers[index];
-
-    this.client.json({
-      action: 'onSelectAnswer',
-      winnerConnectionId: selectedAns.connectionId,
-      roomName: this.props.roomName,
-      groupName: this.props.groupName,
-    });
-
-    this.setState({
-      ...this.state,
-      answerReveal: false,
-      answers: [],
-    });
-  }
-
   selectAnswerCard() {
     if (this.state.answerSubmitted) {
       return;
@@ -211,8 +197,6 @@ class HandScreen extends Component {
     let _answer = this.state.answerCards[this.state.activeAnswerCardIndex]
       .answer;
     let _id = this.state.answerCards[this.state.activeAnswerCardIndex].id;
-
-    console.log('selected answer: ' + _answer);
 
     this.client.json({
       action: 'onAnswer',
@@ -233,6 +217,7 @@ class HandScreen extends Component {
       ...this.state,
       answerCards: answerHandCopy,
       answerSubmitted: true,
+      activeAnswerCardIndex: 0,
     });
   }
 
@@ -347,6 +332,134 @@ class HandScreen extends Component {
     );
   }
 
+  proceedToScoreboard() {
+    this.setState({
+      roundStage: RESULTS_STAGE_SCOREBOARD,
+    });
+  }
+
+  proceedToNextRound() {
+    this.setState({
+      roundStage: ANSWER_SUBMISSION_STAGE,
+    });
+  }
+
+  scoreBoardView() {
+    return (
+      <SafeAreaView>
+        <View style={{width: width, alignItems: 'center'}}>
+          <View style={styles.cardViewUpper}>
+            <Text style={styles.instructionText}>Round Review!</Text>
+            <View style={{height: 50, width: 50, paddingTop: 10}}>
+              <Image
+                style={{height: 50, width: 50}}
+                resizeMode="contain"
+                source={require('./../../../assets/crowns.png')}
+              />
+            </View>
+            <View style={{height: 20}} />
+            <Text style={styles.questionText}>Scoreboard:</Text>
+          </View>
+          <View style={styles.cardViewLower}>
+            <ScrollView contentContainerStyle={styles.middleScrollView}>
+              <View style={{alignItems: 'center', width: width}}>
+                {this.state.playersAndScores.map((item) => {
+                  return (
+                    <View style={styles.resultsTextView}>
+                      <Text style={styles.questionText}>{item.playerName}</Text>
+                      <Text style={styles.questionText}>{item.playerWins}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+            <View style={styles.buttonArea}>
+              <TouchableOpacity
+                style={{
+                  ...styles.proceedButton,
+                  backgroundColor: proceedBlue,
+                }}
+                onPress={() => this.proceedToNextRound()}>
+                <Text style={styles.proceedButtonText}>
+                  Continue to next round
+                </Text>
+              </TouchableOpacity>
+              {this.addQuestionAnswerView()}
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  winningAnswerView() {
+    return (
+      <SafeAreaView>
+        <View style={{width: width, alignItems: 'center'}}>
+          <View style={styles.cardViewUpper}>
+            <Text style={styles.instructionText}>Round Review!</Text>
+            <View style={{height: 50, width: 50, paddingTop: 10}}>
+              <Image
+                style={{height: 50, width: 50}}
+                resizeMode="contain"
+                source={require('./../../../assets/crowns.png')}
+              />
+            </View>
+            <ScrollView contentContainerStyle={styles.middleScrollView}>
+              <Text style={styles.questionText}>
+                Q: {this.state.previousQuestion}
+              </Text>
+            </ScrollView>
+          </View>
+          <View style={styles.cardViewLower}>
+            <ScrollView contentContainerStyle={styles.middleScrollView}>
+              <View style={{width: width, alignItems: 'center'}}>
+                <View style={styles.winnerText}>
+                  <Text
+                    style={{
+                      ...styles.bestAnswerText,
+                      textDecorationLine: 'underline',
+                    }}>
+                    Best Answer:
+                  </Text>
+                  <Text style={styles.bestAnswerText}>
+                    {this.state.winningAnswer}
+                  </Text>
+                </View>
+                <View style={{height: 30}} />
+                <View style={styles.winnerText}>
+                <Text
+                    style={{
+                      ...styles.bestAnswerText,
+                      textDecorationLine: 'underline',
+                    }}>
+                    Round Winner:{' '}
+                  </Text>
+                  <Text style={styles.bestAnswerText}>
+                    {this.state.roundHostName}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+            <View style={styles.buttonArea}>
+              <TouchableOpacity
+                style={{
+                  ...styles.proceedButton,
+                  backgroundColor: proceedBlue,
+                }}
+                onPress={() => this.proceedToScoreboard()}>
+                <Text style={styles.proceedButtonText}>
+                  Continue to results
+                </Text>
+              </TouchableOpacity>
+              {this.addQuestionAnswerView()}
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   submitAnswerStageNotHost() {
     return (
       <SafeAreaView>
@@ -390,17 +503,96 @@ class HandScreen extends Component {
     );
   }
 
-  mapResults() {
+  _renderSubmittedCard = ({item, index}) => {
     return (
-      <View>
-        {this.state.playersAndScores.map((result) => {
-          return (
-            <Text style={styles.smallText}>
-              {result.playerName}:{result.playerWins} wins
-            </Text>
-          );
-        })}
+      <View style={styles.card}>
+        <ScrollView>
+          <Text style={styles.cardText}>A: {item.answerStruct.answer}</Text>
+        </ScrollView>
       </View>
+    );
+  };
+
+  selectBestAnswer() {
+    let selectedAns = this.state.answers[
+      this.state.activeSelectedSubmissionCardIndex
+    ];
+
+    console.log('selected submission: ', selectedAns);
+
+    this.client.json({
+      action: 'onSelectAnswer',
+      winnerConnectionId: selectedAns.connectionId,
+      roomName: this.props.roomName,
+      groupName: this.props.groupName,
+    });
+
+    this.setState({
+      ...this.state,
+      answers: [],
+      activeSelectedSubmissionCardIndex: 0,
+    });
+  }
+
+  forceNextRoundAnswerPick() {}
+
+  mapAnswerSubmissions() {
+    let instructionText = this.state.isHost
+      ? 'Please select the best answer!'
+      : 'Please wait for round host!';
+    let hostPickButton = (
+      <TouchableOpacity
+        style={{
+          ...styles.proceedButton,
+          backgroundColor: proceedGreen,
+        }}
+        onPress={() => this.selectBestAnswer()}>
+        <Text style={styles.proceedButtonText}>Select this answer</Text>
+      </TouchableOpacity>
+    );
+    let forceNextRoundButton = (
+      <TouchableOpacity
+        style={{
+          ...styles.proceedButton,
+          backgroundColor: proceedRed,
+        }}
+        onPress={() => this.forceNextRoundAnswerPick()}>
+        <Text style={styles.proceedButtonText}>Force next round</Text>
+      </TouchableOpacity>
+    );
+    return (
+      <SafeAreaView>
+        <View style={{width: width, alignItems: 'center'}}>
+          <View style={styles.cardViewUpper}>
+            <Text style={styles.instructionText}>{instructionText}</Text>
+            <ScrollView contentContainerStyle={styles.middleScrollView}>
+              <Text style={styles.questionText}>
+                Q: {this.state.currentQuestion}
+              </Text>
+            </ScrollView>
+          </View>
+          <View style={styles.cardViewLower}>
+            <Carousel
+              ref={(c) => {
+                this._carousel = c;
+              }}
+              layout="default"
+              data={this.state.answers}
+              renderItem={this._renderSubmittedCard}
+              sliderWidth={width}
+              itemWidth={width * 0.7}
+              onSnapToItem={(index) => {
+                this.setState({activeSelectedSubmissionCardIndex: index});
+              }}
+            />
+            <View style={styles.buttonArea}>
+              {this.state.isHost && hostPickButton}
+              {!this.state.isHost && forceNextRoundButton}
+              {this.addQuestionAnswerView()}
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -499,6 +691,12 @@ class HandScreen extends Component {
           {this.state.roundStage === ANSWER_SUBMISSION_STAGE &&
             (this.state.isHost || this.state.answerSubmitted) &&
             this.submitAnswerStageWaitingPlayers()}
+          {this.state.roundStage === ANSWER_SELECTION_STAGE &&
+            this.mapAnswerSubmissions()}
+          {this.state.roundStage === RESULTS_STAGE_ANSWER_REVEAL &&
+            this.winningAnswerView()}
+          {this.state.roundStage === RESULTS_STAGE_SCOREBOARD &&
+            this.scoreBoardView()}
         </SafeAreaView>
       </View>
     );
@@ -571,6 +769,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '500',
   },
+  bestAnswerText: {
+    fontSize: 22,
+    color: proceedGreen,
+    fontWeight: '500',
+    flexWrap: 'wrap',
+    textAlign: 'center',
+  },
   instructionText: {
     fontSize: 18,
     color: 'white',
@@ -602,9 +807,14 @@ const styles = StyleSheet.create({
   },
   middleScrollView: {flexGrow: 1, justifyContent: 'center'},
   resultsTextView: {
-    width: width * 0.8,
+    width: width * 0.7,
     flexDirection: 'row',
     justifyContent: 'space-between',
     height: 40,
+  },
+  winnerText: {
+    width: '90%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
