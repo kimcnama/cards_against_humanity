@@ -149,18 +149,18 @@ class HandScreen extends Component {
         console.log('round complete', body.body);
         let jsonBody = body.body;
         let prevQ = this.state.currentQuestion;
-        let nextRoundStageSelection =
-          jsonBody.forceNextRound === false
-            ? RESULTS_STAGE_ANSWER_REVEAL
-            : RESULTS_STAGE_SCOREBOARD;
+        // let nextRoundStageSelection =
+        //   body.forceNextRound === false
+        //     ? RESULTS_STAGE_ANSWER_REVEAL
+        //     : RESULTS_STAGE_SCOREBOARD;
         this.setState({
           currentQuestion: jsonBody.nextQuestion,
           playersAndScores: jsonBody.scores,
           winningAnswer: jsonBody.winningAnswer,
           answerSubmitted: false,
-          roundStage: nextRoundStageSelection,
           previousQuestion: prevQ,
           isAnswerToNextQuestionSlider: true,
+          roundStage: RESULTS_STAGE_ANSWER_REVEAL,
         });
         return;
       case 'currentRoundHost':
@@ -171,6 +171,7 @@ class HandScreen extends Component {
           roundHostName: body.hostName,
         });
         if (body.forcedNextRound === true) {
+          console.log('forced next round', body.forcedNextRound);
           this.setState({roundStage: RESULTS_STAGE_SCOREBOARD});
         }
         return;
