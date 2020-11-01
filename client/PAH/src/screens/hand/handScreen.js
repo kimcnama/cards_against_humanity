@@ -92,6 +92,7 @@ class HandScreen extends Component {
       roundStage: ANSWER_SUBMISSION_STAGE,
       previousQuestion: '',
       canForceNextRound: true,
+      bestAnswerSelected: false,
     };
     //Init WebSockets with Cognito Access Token
     this.client = new Sockette(wsURL, {
@@ -580,6 +581,10 @@ class HandScreen extends Component {
   };
 
   selectBestAnswer() {
+    if (this.state.answerSubmitted) {
+      return;
+    }
+
     let selectedAns = this.state.answers[
       this.state.activeSelectedSubmissionCardIndex
     ];
@@ -598,6 +603,7 @@ class HandScreen extends Component {
       ...this.state,
       answers: [],
       activeSelectedSubmissionCardIndex: 0,
+      answerSubmitted: true,
     });
   }
 
@@ -716,9 +722,11 @@ class HandScreen extends Component {
       return;
     }
 
+    let ansNextQ = this.state.isAnswerToNextQuestionSlider;
+
     this.client.json({
       action: 'onAnswer',
-      answerToNextQuestion: this.state.isAnswerToNextQuestionSlider,
+      answerToNextQuestion: ansNextQ,
       answer: this.state.customAnswer,
       addToDB: true,
       id: '',
@@ -732,6 +740,9 @@ class HandScreen extends Component {
       ...this.state,
       customAnswer: '',
       answerSubmitted: true,
+      showAddQuestionModal: false,
+      showAddAnswerModal: false,
+      isAnswerToNextQuestionSlider: false,
     });
   }
 
