@@ -4,6 +4,7 @@ require('./join-patch.js');
 let send = undefined;
 const TABLE_NAME = "GameStates";
 const TABLE_NAME_QUESTIONS = "Questions";
+const MAX_ROUND_LIMIT_SECS = 90;
 
 function init(event) {
    const apigwManagementApi = new AWS.ApiGatewayManagementApi({
@@ -44,9 +45,30 @@ function getNextQuestion(groupName) {
    }).promise();
 }
 
-function notifyPlayersOfSelection(connectionIds, playerWinner, winningAnswer, nextQuestion, players) {
+// unbiased shuffle algorithm is the Fisher-Yates
+function shuffle(array) {
+  var currentIndex = array.length, temporaryValue, randomIndex;
+
+  // While there remain elements to shuffle...
+  while (0 !== currentIndex) {
+
+    // Pick a remaining element...
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex -= 1;
+
+    // And swap it with the current element.
+    temporaryValue = array[currentIndex];
+    array[currentIndex] = array[randomIndex];
+    array[randomIndex] = temporaryValue;
+  }
+
+  return array;
+}
+
+function notifyPlayersOfSelection(connectionIds, playerWinner, winningAnswer, nextQuestion, players, forceNextRound) {
    let msg = JSON.stringify({
       eventType: 'selectionRoundComplete',
+      forceNextRound: forceNextRound,
       body: {
          winner: playerWinner,
          winningAnswer: winningAnswer,
@@ -59,22 +81,42 @@ function notifyPlayersOfSelection(connectionIds, playerWinner, winningAnswer, ne
    }
 }
 
-function notifyUsersOfRoundHost(connectionIds, hostId) {
+function notifyUsersOfRoundHost(connectionIds, hostId, winnerName, forceNextRound) {
    let msg = JSON.stringify({
       eventType: 'currentRoundHost',
       hostConnectionId: hostId,
+      hostName: winnerName,
+      forcedNextRound: forceNextRound,
    });
    for (var i = 0; i<connectionIds.length; i++) {
       send(connectionIds[i], msg).then();
    }
 }
 
-function processAnswer(connectionId, roomName, winnerConnectionId, groupName) {
+function sendRoundLenLeft(connId, secs) {
+   let secsRound = Math.round(secs);
+   send(connId, JSON.stringify({
+      eventType: 'roundLenTimeLeft',
+      secs: secsRound,
+   }));
+}
+
+function processAnswer(connectionId, roomName, winnerConnectionId, groupName, forceNextRound) {
    return getAvailableGameSession(roomName).then((data) => {
-       
       console.log("Game session data: %j", data);
       
-      notifyUsersOfRoundHost(data.Items[0].playerIds, winnerConnectionId);
+      if (forceNextRound === true) {
+         console.log('attempting to force next round');
+         let roundStartTime = data.Items[0].roundStart;
+         let timeDiffSecs = (Date.now() - roundStartTime) / 1000;
+         if (timeDiffSecs < MAX_ROUND_LIMIT_SECS) {
+            sendRoundLenLeft(connectionId, MAX_ROUND_LIMIT_SECS - timeDiffSecs);
+            console.log('not enough time elapsed to force next round');
+            return;
+         }
+      }
+      
+      console.log('winner conn id: ' + winnerConnectionId);
       
       var playerName = " ";
       var winningAnswer = " ";
@@ -90,13 +132,15 @@ function processAnswer(connectionId, roomName, winnerConnectionId, groupName) {
       }
       console.log("winning answer", winningAnswer);
       console.log("_players", _players);
-      for (var i = 0; i<_players.length; i++) {
-          if (_players[i].connectionId.includes(winnerConnectionId)) {
-              playerName = _players[i].playerName;
-              _players[i].playerWins = _players[i].playerWins + 1;
-              break;
-          }
-      }
+       if (forceNextRound === false) {
+         for (var i = 0; i<_players.length; i++) {
+             if (_players[i].connectionId.includes(winnerConnectionId)) {
+                 playerName = _players[i].playerName;
+                 _players[i].playerWins = _players[i].playerWins + 1;
+                 break;
+             }
+         }
+       }
       console.log("winning player", playerName);
          
      let fieldsToUpdate = ["players", "roundHost", "roundAnswers", "numAnswersIn", "roundsPlayed", "roundStart", "nextQuestions", "currentQuestion", "questionsAsked"];
@@ -105,8 +149,15 @@ function processAnswer(connectionId, roomName, winnerConnectionId, groupName) {
      // increment player wins
      fieldValues.push(_players);
          
-    // update round host
-     fieldValues.push(winnerConnectionId);
+       // update round host
+       if (forceNextRound) {
+          console.log('updating winner conn id');
+          let _playerIds = data.Items[0].playerIds;
+          let randNextHostInd = Math.floor((Math.random() * _playerIds.length));
+          winnerConnectionId = _playerIds[randNextHostInd];
+       }
+       
+     fieldValues.push(winnerConnectionId);  
      
      // update round answer
      fieldValues.push([]);
@@ -146,24 +197,37 @@ function processAnswer(connectionId, roomName, winnerConnectionId, groupName) {
          fieldValues.push(nextQuestion);
          fieldValues.push(nextQuestionId);
          questionsAskedList.push(questionAskedId);
-         return updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedList, data, playerName, winningAnswer, _players);
+         return updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedList, data, playerName, winningAnswer, _players, winnerConnectionId, forceNextRound);
      } else {
          getNextQuestion(groupName).then((questionData) => {
             console.log("questionData", questionData);
               if (questionData && questionData.Count > 0) {
-                  var indexNextQ = Math.floor(Math.random() * questionData.Count);
-                  nextQuestion = questionData.Items[indexNextQ].question;
-                  questionAskedId = questionData.Items[indexNextQ].id;
-                  questionsAskedList.push(questionAskedId);
+
+                  var shuffledQuestions = shuffle(questionData.Items);
+                  var questionCardFound = false;
+                  
+                  for (var k=0; k<shuffledQuestions.length; k++) {
+                     if (!questionsAskedList.includes(shuffledQuestions[k].id)) {
+                        nextQuestion = shuffledQuestions[k].question;
+                        questionsAskedList.push(shuffledQuestions[k].id);
+                        questionCardFound = true;
+                        break
+                     }
+                  }
+                  if (!questionCardFound) {
+                     console.log('question card not found. Num questions asked: ' + questionsAskedList.length);
+                     nextQuestion = shuffledQuestions[0].question;
+                     questionsAskedList = [];
+                  }
               }
-              return updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedList, data, playerName, winningAnswer, _players);
+              return updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedList, data, playerName, winningAnswer, _players, winnerConnectionId, forceNextRound);
          });
       
      }
    });
 }
 
-function updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedIdList, data, playerName, winningAnswer, gamePlayers) {
+function updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedIdList, data, playerName, winningAnswer, gamePlayers, winnerConnectionId, forceNextRound) {
    fieldValues.push(nextQuestion);
    fieldValues.push(questionsAskedIdList);
    
@@ -172,7 +236,8 @@ function updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAs
          
      for (var i = 0; i<fieldsToUpdate.length; i++) {
          if (i === fieldsToUpdate.length - 1) {
-            notifyPlayersOfSelection(data.Items[0].playerIds, playerName, winningAnswer, nextQuestion, gamePlayers);
+            notifyPlayersOfSelection(data.Items[0].playerIds, playerName, winningAnswer, nextQuestion, gamePlayers, forceNextRound);  
+            notifyUsersOfRoundHost(data.Items[0].playerIds, winnerConnectionId, playerName, forceNextRound);
              return updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]);
          } else {
             var voidVal = updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]); 
@@ -213,7 +278,10 @@ exports.handler = (event, context, callback) => {
    let groupName = body.groupName;
    console.log("groupName: %j", groupName);
    
-   processAnswer(connectionIdForCurrentRequest, roomNm, winnerConnId, groupName).then(() => {
+   let forceNextRound = body.forceNextRound;
+   console.log("groupName: %j", forceNextRound);
+   
+   processAnswer(connectionIdForCurrentRequest, roomNm, winnerConnId, groupName, forceNextRound).then(() => {
       callback(null, {
          statusCode: 200
       });

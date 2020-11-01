@@ -1,0 +1,16 @@
+{"action": "joinRoom", "playerName": "reeb", "roomName": "select"}
+
+{"action": "joinRoom", "playerName": "jack", "roomName": "auto", "groupName": "phenibrutes"}
+{"action": "joinRoom", "playerName": "celine", "roomName": "kill", "groupName": "standard"}
+
+{"action": "onAnswer", "answerToNextQuestion": true, "answer": "your ma", "groupName": "phenibrutes", "addToDB": true, "roomName": "auto", "id": "", "playerName":"jack"}
+
+{"action": "onAnswer", "answerToNextQuestion": true, "answer": "your da", "groupName": "phenibrutes", "addToDB": true, "roomName": "auto", "id": "", "playerName": "celine"}
+
+
+{"action": "onSelectAnswer", "winnerConnectionId": "VFk-efwrDoECIOQ=", "roomName": "select", "group":"phenibrutes"}
+
+{"action": "onPushNextQuestion", "question": "A successful job interview begins with a firm handshake and ends with ____.", "roomName": "auto", "groupName":"standard"}
+{"action": "onAnswer", "answerToNextQuestion": false, "group": "standard", "addToDB": true, "roomName": "auto", "id": "", "playerName":"jack", "answer": "a lifetime of sadness"}
+
+playerIdsThatNeedAnswerCards
