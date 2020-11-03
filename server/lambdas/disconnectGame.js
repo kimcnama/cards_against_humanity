@@ -3,6 +3,7 @@ const ddb = new AWS.DynamoDB.DocumentClient();
 require('./disconnect-patch.js');
 const TABLE_NAME = "GameStates";
 const GATEWAY_TABLE_NAME = "GatewayConnections";
+const ANSWER_STAGING_DB_NAME = "AnswerStaging";
 let dissconnectWs = undefined;
 let wsStatus = undefined;
 let send = undefined;
@@ -21,6 +22,22 @@ function init(event) {
     dissconnectWs = async(connectionId) => {
         await apigwManagementApi.deleteConnection({ ConnectionId: connectionId }).promise();
     }
+}
+
+function deleteStagingAnswers(roomName) {
+    let params = {
+        TableName: ANSWER_STAGING_DB_NAME,
+        Key: {
+           "RoomName": roomName,
+        },
+    };
+    ddb.delete(params, function(err, data) {
+        if (err) {
+            console.error("Unable to gateway item. Error JSON:", JSON.stringify(err, null, 2));
+        } else {
+            console.log("DeleteItem gateway succeeded:", JSON.stringify(data, null, 2));
+        }
+    });
 }
 
 function getGameSession(connectionId) {
@@ -105,6 +122,7 @@ exports.handler = (event, context, callback) => {
                     console.log("DeleteItem succeeded:", JSON.stringify(data, null, 2));
                 }
             });
+            deleteStagingAnswers(data.Items[0].RoomName);
         } else {
             let playerName = getPlayerNameFromRow(data.Items[0], connectionIdForCurrentRequest);
             console.log("removing " + playerName + " from game");
