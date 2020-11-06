@@ -101,10 +101,23 @@ class HandScreen extends Component {
       onopen: (e) => this.onWssOpen(e),
       onmessage: (e) => this.parseOnMessage(e),
       onreconnect: (e) => console.log('Reconnecting...', e),
-      onmaximum: (e) => console.log('Stop Attempting!', e),
-      onclose: (e) => console.log('Closed!', e),
-      onerror: (e) => console.log('Error:', e),
+      onmaximum: (e) => {
+        console.log('Stop Attempting!', e);
+        this.displayDisconnectScreen();
+      },
+      onclose: (e) => {
+        console.log('Closed!', e);
+        this.displayDisconnectScreen();
+      },
+      onerror: (e) => {
+        console.log('Error:', e);
+        this.displayDisconnectScreen();
+      },
     });
+  }
+
+  displayDisconnectScreen() {
+    this.props.navigation.replace('OnDisconnect');
   }
 
   parseOnMessage(event) {

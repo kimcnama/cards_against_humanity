@@ -5,6 +5,7 @@ import HeaderStyle from './HeaderStyles';
 
 import GameSetup from './../screens/setup/gameSetup';
 import HandScreen from './../screens/hand/handScreen';
+import OnDisconnect from './../screens/onDisconnect/onDisconnect';
 
 interface RoutesProps {}
 
@@ -18,11 +19,16 @@ function HandViewScreen({navigation}) {
     return <HandScreen navigation={navigation} />;
 }
 
+function OnDisconnectScreen({navigation}) {
+    return <OnDisconnect navigation={navigation} />;
+}
+
 export const Routes: React.FC<RoutesProps> = ({}) => (
     <NavigationContainer>
         <Stack.Navigator screenOptions={HeaderStyle} >
             <Stack.Screen name="GameSetup" component={GameSetupScreen} />
             <Stack.Screen name="Hand" component={HandViewScreen} />
+            <Stack.Screen name="OnDisconnect" component={OnDisconnectScreen} />
         </Stack.Navigator>
     </NavigationContainer>
 )
