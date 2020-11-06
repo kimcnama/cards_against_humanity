@@ -81,7 +81,7 @@ class GameSetup extends React.Component {
     this.props.addRoomProp(this.state.roomName);
     this.props.addPlayerNameProp(this.state.playerName);
     this.props.addGroupProp(this.state.groupName);
-    this.props.navigation.navigate('Hand');
+    this.props.navigation.navigate('InputGroup');
   }
 
   render() {
