@@ -35,12 +35,13 @@ function getAvailableGameSession(roomName) {
 function getNextQuestion(groupName) {
    return ddb.scan({
       TableName: TABLE_NAME_QUESTIONS,
-      FilterExpression: "#gr = :groupNm OR #gr = standard",
+      FilterExpression: "#gr = :groupNm OR #gr = :std",
       ExpressionAttributeNames: {
          "#gr": "group",
       },
       ExpressionAttributeValues: {
          ":groupNm": groupName,
+         ":std": "standard",
       }
    }).promise();
 }
@@ -194,8 +195,7 @@ function processAnswer(connectionId, roomName, winnerConnectionId, groupName, fo
      var questionsAskedList = data.Items[0].questionsAsked;
      // currentQuestion && id
      if (nextQuestion !== "") {
-         fieldValues.push(nextQuestion);
-         fieldValues.push(nextQuestionId);
+
          questionsAskedList.push(questionAskedId);
          return updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedList, data, playerName, winningAnswer, _players, winnerConnectionId, forceNextRound);
      } else {
@@ -230,6 +230,7 @@ function processAnswer(connectionId, roomName, winnerConnectionId, groupName, fo
 function updateDBinstance(fieldsToUpdate, fieldValues, nextQuestion, questionsAskedIdList, data, playerName, winningAnswer, gamePlayers, winnerConnectionId, forceNextRound) {
    fieldValues.push(nextQuestion);
    fieldValues.push(questionsAskedIdList);
+   console.log('question asked id list: ', questionsAskedIdList);
    
    console.log("fieldsToUpdate", fieldsToUpdate);
      console.log("field values", fieldValues);

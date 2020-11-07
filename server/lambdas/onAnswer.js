@@ -190,106 +190,119 @@ function processAnswer(connectionId, answer, answerToNextQuestion, group, addToD
          
          let roundAns = {"connectionId": connectionId, "playerName": playerName, "answerStruct": {"answer": answer, "id": id}}
          
-         pushAnswerStaging(roomName, connectionId, roundAns, id).then(() => {
+         if (forceNextRound) {
             
-            getAnswersStaging(roomName).then((stagingAnswers) => {
-               
-               console.log("stagingAnswers", stagingAnswers);
-               
-               var lastPlayer = false;
-               
-               if (stagingAnswers.Count < data.Items[0].numPlayers - 1) {
-                  console.log("Not enough answers submitted to proceed yet");
-               } else {
-                  console.log('last player true');
-                  lastPlayer = true;
-               }
-               
-               if (forceNextRound === true) {
-                  console.log('forcing next round');
-                  lastPlayer = true;
-               }
-               
-               var fieldsToUpdate = [];
-               var fieldValues = [];
-               
-               if (lastPlayer) {
-                  var _roundAnswers = [];
-                  var answerIdsStaging = [];
-                  // get answers and answer ids from from answer staging
-                  for (var a = 0; a < stagingAnswers.Count; a++) {
-                     _roundAnswers.push(stagingAnswers.Items[a].answerJSON);
-                     answerIdsStaging.push(stagingAnswers.Items[a].id);
-                  }
-                  
-                  fieldsToUpdate.push("roundAnswers");
-                  fieldValues.push(_roundAnswers);
-                     
-                  if (forceNextRound === false) {   
-                     fieldsToUpdate.push("answerSubmitted");
-                     var _answersSubmitted = data.Items[0].answerSubmitted.concat(answerIdsStaging);
-                     fieldValues.push(_answersSubmitted);
-                  }
-               }
-               
-               if (addToDB === false) {
-                  getAnswerCards(group).then((answersData) => {
-               
-                     if (forceNextRound === false) {
-                        var cardDealtList = data.Items[0].answersDealt;
-                        var cardToSendToUser = getRandomCardNotDealt(answersData.Items, cardDealtList);
-                        
-                        fieldsToUpdate.push("answersDealt");
-                        fieldValues.push(cardDealtList);
-                        
-                        send(connectionId, JSON.stringify({
-                           eventType: 'pushNewCardToUser',
-                           card: cardToSendToUser,
-                        }));
-                     }
-                     
-                     for (var i = 0; i<fieldsToUpdate.length; i++) {
-                         if (i === fieldsToUpdate.length - 1) {
-                            console.log("answers needed", data.Items[0].numPlayers - 1);
-                            if (lastPlayer) {
-                               console.log("enough answers in, next round");
-                               pushNextRound(data.Items[0].playerIds, _roundAnswers);
-                               deleteStagingAnswers(roomName);
-                            } else {
-                               notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
-                            }
-                             return updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]);
-                         } else {
-                            var voidVal = updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]); 
-                         }
-                     }
-                     
-                  });
-               } else {
-                  for (var i = 0; i<fieldsToUpdate.length; i++) {
-                         if (i === fieldsToUpdate.length - 1) {
-                            console.log("answers needed", data.Items[0].numPlayers - 1);
-                            if (lastPlayer) {
-                               console.log("enough answers in, next round");
-                               pushNextRound(data.Items[0].playerIds, _roundAnswers);
-                               deleteStagingAnswers(roomName);
-                            } else {
-                               notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
-                            }
-                             return updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]);
-                         } else {
-                            var voidVal = updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]); 
-                         }
-                     }
-               } 
-            });
-         });
+            getStagingAnswersProcessRound(data, roomName, forceNextRound, addToDB, group, connectionId, playerName);
+            
+         } else {
+            pushAnswerStaging(roomName, connectionId, roundAns, id).then(() => {
+            
+            getStagingAnswersProcessRound(data, roomName, forceNextRound, addToDB, group, connectionId, playerName);
+            
+         });  
+         }
       }
    });
 }
 
-function getStagingAnswersProcessRound() {
-   
+function getStagingAnswersProcessRound(data, roomName, forceNextRound, addToDB, group, connectionId, playerName) {
+   getAnswersStaging(roomName).then((stagingAnswers) => {
+               
+      console.log("stagingAnswers", stagingAnswers);
+      
+      var lastPlayer = false;
+      
+      if (stagingAnswers.Count < data.Items[0].numPlayers - 1) {
+         console.log("Not enough answers submitted to proceed yet");
+      } else {
+         console.log('last player true');
+         lastPlayer = true;
+      }
+      
+      if (forceNextRound === true) {
+         console.log('forcing next round');
+         lastPlayer = true;
+      }
+      
+      var fieldsToUpdate = [];
+      var fieldValues = [];
+      
+      if (lastPlayer) {
+         var _roundAnswers = [];
+         var answerIdsStaging = [];
+         // get answers and answer ids from from answer staging
+         for (var a = 0; a < stagingAnswers.Count; a++) {
+            _roundAnswers.push(stagingAnswers.Items[a].answerJSON);
+            answerIdsStaging.push(stagingAnswers.Items[a].id);
+         }
+         
+         fieldsToUpdate.push("roundAnswers");
+         fieldValues.push(_roundAnswers);
+            
+         if (forceNextRound === false) {   
+            fieldsToUpdate.push("answerSubmitted");
+            var _answersSubmitted = data.Items[0].answerSubmitted.concat(answerIdsStaging);
+            fieldValues.push(_answersSubmitted);
+         }
+         
+         fieldsToUpdate.push("roundStart");
+         fieldValues.push(Date.now());
+      }
+      
+      if (addToDB === false) {
+         getAnswerCards(group).then((answersData) => {
+      
+            if (forceNextRound === false) {
+               var cardDealtList = data.Items[0].answersDealt;
+               var cardToSendToUser = getRandomCardNotDealt(answersData.Items, cardDealtList);
+               
+               fieldsToUpdate.push("answersDealt");
+               fieldValues.push(cardDealtList);
+               
+               send(connectionId, JSON.stringify({
+                  eventType: 'pushNewCardToUser',
+                  card: cardToSendToUser,
+               }));
+            }
+            
+            for (var i = 0; i<fieldsToUpdate.length; i++) {
+                if (i === fieldsToUpdate.length - 1) {
+                   console.log("answers needed", data.Items[0].numPlayers - 1);
+                   if (lastPlayer) {
+                      console.log("enough answers in, next round");
+                      pushNextRound(data.Items[0].playerIds, _roundAnswers);
+                      deleteStagingAnswers(roomName);
+                   } else {
+                      notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
+                   }
+                    return updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]);
+                } else {
+                   var voidVal = updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]); 
+                }
+            }
+            
+         });
+      } else {
+         if (fieldsToUpdate.length < 1) {
+            notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
+         }
+         for (var i = 0; i<fieldsToUpdate.length; i++) {
+                if (i === fieldsToUpdate.length - 1) {
+                   console.log("answers needed", data.Items[0].numPlayers - 1);
+                   if (lastPlayer) {
+                      console.log("enough answers in, next round");
+                      pushNextRound(data.Items[0].playerIds, _roundAnswers);
+                      deleteStagingAnswers(roomName);
+                   } else {
+                      notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
+                   }
+                    return updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]);
+                } else {
+                   var voidVal = updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]); 
+                }
+            }
+      } 
+   });
 }
 
 function updateDBGameInstance(roomNm, field, value) {
