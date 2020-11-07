@@ -201,10 +201,12 @@ function processAnswer(connectionId, answer, answerToNextQuestion, group, addToD
                if (stagingAnswers.Count < data.Items[0].numPlayers - 1) {
                   console.log("Not enough answers submitted to proceed yet");
                } else {
+                  console.log('last player true');
                   lastPlayer = true;
                }
                
                if (forceNextRound === true) {
+                  console.log('forcing next round');
                   lastPlayer = true;
                }
                
@@ -214,15 +216,16 @@ function processAnswer(connectionId, answer, answerToNextQuestion, group, addToD
                if (lastPlayer) {
                   var _roundAnswers = [];
                   var answerIdsStaging = [];
+                  // get answers and answer ids from from answer staging
                   for (var a = 0; a < stagingAnswers.Count; a++) {
                      _roundAnswers.push(stagingAnswers.Items[a].answerJSON);
                      answerIdsStaging.push(stagingAnswers.Items[a].id);
                   }
                   
-                  if (forceNextRound === false) {
-                     fieldsToUpdate.push("roundAnswers");
-                     fieldValues.push(_roundAnswers);
+                  fieldsToUpdate.push("roundAnswers");
+                  fieldValues.push(_roundAnswers);
                      
+                  if (forceNextRound === false) {   
                      fieldsToUpdate.push("answerSubmitted");
                      var _answersSubmitted = data.Items[0].answerSubmitted.concat(answerIdsStaging);
                      fieldValues.push(_answersSubmitted);
@@ -232,18 +235,18 @@ function processAnswer(connectionId, answer, answerToNextQuestion, group, addToD
                if (addToDB === false) {
                   getAnswerCards(group).then((answersData) => {
                
-                     fieldsToUpdate.push("answersDealt");
-               
-                     var cardDealtList = data.Items[0].answersDealt;
-                     
-                     var cardToSendToUser = getRandomCardNotDealt(answersData.Items, cardDealtList);
-                     
-                     fieldValues.push(cardDealtList);
-                     
-                     send(connectionId, JSON.stringify({
-                        eventType: 'pushNewCardToUser',
-                        card: cardToSendToUser,
-                     }));
+                     if (forceNextRound === false) {
+                        var cardDealtList = data.Items[0].answersDealt;
+                        var cardToSendToUser = getRandomCardNotDealt(answersData.Items, cardDealtList);
+                        
+                        fieldsToUpdate.push("answersDealt");
+                        fieldValues.push(cardDealtList);
+                        
+                        send(connectionId, JSON.stringify({
+                           eventType: 'pushNewCardToUser',
+                           card: cardToSendToUser,
+                        }));
+                     }
                      
                      for (var i = 0; i<fieldsToUpdate.length; i++) {
                          if (i === fieldsToUpdate.length - 1) {
@@ -283,6 +286,10 @@ function processAnswer(connectionId, answer, answerToNextQuestion, group, addToD
          });
       }
    });
+}
+
+function getStagingAnswersProcessRound() {
+   
 }
 
 function updateDBGameInstance(roomNm, field, value) {
