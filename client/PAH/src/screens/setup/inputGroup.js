@@ -31,7 +31,7 @@ class InputGroup extends Component {
     super();
     this.navigation = props.navigation;
     this.state = {
-      groupName: 'standard',
+      groupName: 'phenibrutes',
       errorText: '',
     };
   }

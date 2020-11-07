@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 
 import {connect} from 'react-redux';
-import {addCard} from './../../actions/hand';
 
 import Sockette from 'sockette';
 
@@ -44,16 +43,10 @@ const mapStateToProps = (state) => {
   };
 };
 
-const mapDispatchToProps = (dispatch) => {
-  return {
-    addCard: (cardText) => dispatch(addCard(cardText)),
-  };
-};
-
 const {width, height} = Dimensions.get('window');
 
 const wsURL =
-  'wss://7fzsgk085d.execute-api.eu-west-1.amazonaws.com/development';
+  'wss://7fzsgk085d.execute-api.eu-west-1.amazonaws.com/production';
 
 const ANSWER_SUBMISSION_STAGE = 'ANSWER_SUBMISSION_STAGE';
 const ANSWER_SELECTION_STAGE = 'ANSWER_SELECTION_STAGE';
