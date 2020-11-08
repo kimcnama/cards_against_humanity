@@ -4,6 +4,8 @@ require('./join-patch.js');
 let send = undefined;
 const TABLE_NAME = "GameStates";
 const ANSWERS_TABLE_NAME = "Answers";
+const ANSWER_STAGING_DB_NAME = "AnswerStaging";
+const MAX_ROUND_LIMIT_SECS = 90;
 
 function init(event) {
    const apigwManagementApi = new AWS.ApiGatewayManagementApi({
@@ -42,17 +44,7 @@ function addNewAnswersDBEntry(id, answer, group) {
          }).promise();
 }
 
-function notifyPlayersOfAnswer(connectionIds, peopleAnswered, totPeopleToAnswer) {
-   let msg = JSON.stringify({
-      eventType: "playerMessage",
-      message: String(peopleAnswered) + "/" + String(totPeopleToAnswer) + " answers submitted!",
-   });
-   for (var i = 0; i<connectionIds.length; i++) {
-      send(connectionIds[i], msg).then();
-   }
-}
-
-function NotifyPlayersOfPlayerAnswer(connectionIds, playerName) {
+function notifyPlayersOfPlayerAnswer(connectionIds, playerName) {
    let msg = JSON.stringify({
       eventType: "playerAnswered",
       player: playerName,
@@ -73,6 +65,53 @@ function pushNextRound(connectionIds, answersJSON) {
    }
 }
 
+function pushAnswerStaging(roomName, connectionId, answerStruct, id) {
+   return ddb.put({
+      TableName: ANSWER_STAGING_DB_NAME,
+      Item: {
+         RoomName: roomName,
+         connectionId: connectionId,
+         answerJSON: answerStruct,
+         id: id,
+      },
+   }).promise();
+}
+
+function getAnswersStaging(roomName) {
+   return ddb.scan({
+      TableName: ANSWER_STAGING_DB_NAME,
+      FilterExpression: "#rn = :roomNm",
+      ExpressionAttributeNames: {
+         "#rn": "RoomName",
+      },
+      ExpressionAttributeValues: {
+         ":roomNm": roomName,
+      }
+   }).promise();
+}
+
+function deleteStagingAnswers(roomName) {
+   console.log('deleting staging answers for: ', roomName);
+   getAnswersStaging(roomName).then((answerData) => {
+      for (var i = 0; i<answerData.Count; i++) {
+         var params = {
+           TableName: ANSWER_STAGING_DB_NAME,
+           Key: {
+              "RoomName": roomName,
+              "connectionId": answerData.Items[i].connectionId,
+           },
+          };
+          ddb.delete(params, function(err, data) {
+              if (err) {
+                  console.error("Unable to gateway item. Error JSON:", JSON.stringify(err, null, 2));
+              } else {
+                  console.log("DeleteItem gateway succeeded:", JSON.stringify(data, null, 2));
+              }
+          });  
+      }
+   });
+}
+
 function getAnswerCards(groupName) {
    return ddb.scan({
       TableName: ANSWERS_TABLE_NAME,
@@ -87,9 +126,55 @@ function getAnswerCards(groupName) {
    }).promise();
 }
 
-function processAnswer(connectionId, answer, answerToNextQuestion, group, addToDB, roomName, answerId, playerName) {
+// unbiased shuffle algorithm is the Fisher-Yates
+function getRandomCardNotDealt(cards, cardDealtList) {
+  var currentIndex = cards.length, temporaryValue, randomIndex;
+
+  // While there remain elements to shuffle...
+  while (0 !== currentIndex) {
+
+    // Pick a remaining element...
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex -= 1;
+
+    // And swap it with the current element.
+    temporaryValue = cards[currentIndex];
+    cards[currentIndex] = cards[randomIndex];
+    cards[randomIndex] = temporaryValue;
+    
+    if (!cardDealtList.includes(cards[currentIndex].id)) {
+         cardDealtList.push(cards[currentIndex].id);
+         console.log('new card not played found', cards[currentIndex]);
+         return cards[currentIndex];
+      }
+  }
+
+   // out of random cards
+  return {id: '-1', answer: 'No answer cards left. Please enter an answer to current Q.', group: 'error'};
+}
+
+function sendRoundLenLeft(connId, secs) {
+   let secsRound = Math.round(secs);
+   send(connId, JSON.stringify({
+      eventType: 'roundLenTimeLeft',
+      secs: secsRound,
+   }));
+}
+
+function processAnswer(connectionId, answer, answerToNextQuestion, group, addToDB, roomName, answerId, playerName, forceNextRound) {
    return getAvailableGameSession(roomName).then((data) => {
       console.log("Game session data: %j", data);
+      
+      if (forceNextRound === true) {
+         console.log('attempting to force next round');
+         let roundStartTime = data.Items[0].roundStart;
+         let timeDiffSecs = (Date.now() - roundStartTime) / 1000;
+         if (timeDiffSecs < MAX_ROUND_LIMIT_SECS) {
+            sendRoundLenLeft(connectionId, MAX_ROUND_LIMIT_SECS - timeDiffSecs);
+            console.log('not enough time elapsed to force next round');
+            return;
+         }
+      }
       
       var id = answerId;
       
@@ -100,80 +185,123 @@ function processAnswer(connectionId, answer, answerToNextQuestion, group, addToD
       }
       
       if (answerToNextQuestion === true) {
+         
          console.log("Adding answer to answer pool");
          
-         var fieldsToUpdate = ["numAnswersIn", "roundAnswers", "answerSubmitted"];
-         var fieldValues = [];
+         let roundAns = {"connectionId": connectionId, "playerName": playerName, "answerStruct": {"answer": answer, "id": id}}
          
-         let _numAnswersIn = data.Items[0].numAnswersIn + 1;
-         fieldValues.push(_numAnswersIn);
-         
-         var _roundAnswers = data.Items[0].roundAnswers;
-         _roundAnswers.push({"connectionId": connectionId, "answerStruct": {"answer": answer, "id": id}});
-         fieldValues.push(_roundAnswers);
-         
-         var _answersSubmitted = data.Items[0].answerSubmitted;
-         _answersSubmitted.push(id);
-         fieldValues.push(_answersSubmitted);
-         
-         if (addToDB === false) {
-            getAnswerCards(group).then((answersData) => {
-         
-               fieldsToUpdate.push("answersDealt");
-         
-               var cardDealtList = data.Items[0].answersDealt;
-               var cardToSendToUser = {};
-               for (var k = 0; k<answersData.Count; k++) {
-                  if (!cardDealtList.includes(answersData.Items[k].id)) {
-                     cardDealtList.push(answersData.Items[k].id);
-                     cardToSendToUser = answersData.Items[k];
-                     break;
-                  }
-               }
+         if (forceNextRound) {
+            
+            getStagingAnswersProcessRound(data, roomName, forceNextRound, addToDB, group, connectionId, playerName);
+            
+         } else {
+            pushAnswerStaging(roomName, connectionId, roundAns, id).then(() => {
+            
+            getStagingAnswersProcessRound(data, roomName, forceNextRound, addToDB, group, connectionId, playerName);
+            
+         });  
+         }
+      }
+   });
+}
+
+function getStagingAnswersProcessRound(data, roomName, forceNextRound, addToDB, group, connectionId, playerName) {
+   getAnswersStaging(roomName).then((stagingAnswers) => {
                
+      console.log("stagingAnswers", stagingAnswers);
+      
+      var lastPlayer = false;
+      
+      if (stagingAnswers.Count < data.Items[0].numPlayers - 1) {
+         console.log("Not enough answers submitted to proceed yet");
+      } else {
+         console.log('last player true');
+         lastPlayer = true;
+      }
+      
+      if (forceNextRound === true) {
+         console.log('forcing next round');
+         lastPlayer = true;
+      }
+      
+      var fieldsToUpdate = [];
+      var fieldValues = [];
+      
+      if (lastPlayer) {
+         var _roundAnswers = [];
+         var answerIdsStaging = [];
+         // get answers and answer ids from from answer staging
+         for (var a = 0; a < stagingAnswers.Count; a++) {
+            _roundAnswers.push(stagingAnswers.Items[a].answerJSON);
+            answerIdsStaging.push(stagingAnswers.Items[a].id);
+         }
+         
+         fieldsToUpdate.push("roundAnswers");
+         fieldValues.push(_roundAnswers);
+            
+         if (forceNextRound === false) {   
+            fieldsToUpdate.push("answerSubmitted");
+            var _answersSubmitted = data.Items[0].answerSubmitted.concat(answerIdsStaging);
+            fieldValues.push(_answersSubmitted);
+         }
+         
+         fieldsToUpdate.push("roundStart");
+         fieldValues.push(Date.now());
+      }
+      
+      if (addToDB === false) {
+         getAnswerCards(group).then((answersData) => {
+      
+            if (forceNextRound === false) {
+               var cardDealtList = data.Items[0].answersDealt;
+               var cardToSendToUser = getRandomCardNotDealt(answersData.Items, cardDealtList);
+               
+               fieldsToUpdate.push("answersDealt");
                fieldValues.push(cardDealtList);
                
                send(connectionId, JSON.stringify({
                   eventType: 'pushNewCardToUser',
                   card: cardToSendToUser,
                }));
-               for (var i = 0; i<fieldsToUpdate.length; i++) {
+            }
+            
+            for (var i = 0; i<fieldsToUpdate.length; i++) {
                 if (i === fieldsToUpdate.length - 1) {
-                   console.log("answers in", _numAnswersIn);
                    console.log("answers needed", data.Items[0].numPlayers - 1);
-                   if (_numAnswersIn >= data.Items[0].numPlayers - 1) {
+                   if (lastPlayer) {
                       console.log("enough answers in, next round");
                       pushNextRound(data.Items[0].playerIds, _roundAnswers);
+                      deleteStagingAnswers(roomName);
                    } else {
-                      NotifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
-                      notifyPlayersOfAnswer(data.Items[0].playerIds, _numAnswersIn, data.Items[0].numPlayers - 1);
+                      notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
                    }
                     return updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]);
                 } else {
                    var voidVal = updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]); 
                 }
             }
-               
-            })
+            
+         });
       } else {
+         if (fieldsToUpdate.length < 1) {
+            notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
+         }
          for (var i = 0; i<fieldsToUpdate.length; i++) {
                 if (i === fieldsToUpdate.length - 1) {
-                   console.log("answers in", _numAnswersIn);
                    console.log("answers needed", data.Items[0].numPlayers - 1);
-                   if (_numAnswersIn >= data.Items[0].numPlayers - 1) {
+                   if (lastPlayer) {
                       console.log("enough answers in, next round");
                       pushNextRound(data.Items[0].playerIds, _roundAnswers);
+                      deleteStagingAnswers(roomName);
                    } else {
-                      NotifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
-                      notifyPlayersOfAnswer(data.Items[0].playerIds, _numAnswersIn, data.Items[0].numPlayers - 1);
+                      notifyPlayersOfPlayerAnswer(data.Items[0].playerIds, playerName);
                    }
                     return updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]);
                 } else {
                    var voidVal = updateDBGameInstance(data.Items[0].RoomName, fieldsToUpdate[i], fieldValues[i]); 
                 }
             }
-      }
-      }
+      } 
    });
 }
 
@@ -189,7 +317,10 @@ function updateDBGameInstance(roomNm, field, value) {
             }
          }).promise().then(() => {
             console.log("DB game instance field: " + field + "updated");
-         });
+         }).catch((err) => {
+            console.log('error updating game instance:', err);  
+         }
+         );
 }
 
 exports.handler = (event, context, callback) => {
@@ -222,7 +353,10 @@ exports.handler = (event, context, callback) => {
    let playerName = body.playerName;
    console.log("playerName: %j", playerName);
    
-   processAnswer(connectionIdForCurrentRequest, answer, answerToNextQuestion, group, addToDB, roomName, answerId, playerName).then(() => {
+   let forceNextRound = body.forceNextRound;
+   console.log("playerName: %j", playerName);
+
+   processAnswer(connectionIdForCurrentRequest, answer, answerToNextQuestion, group, addToDB, roomName, answerId, playerName, forceNextRound).then(() => {
       callback(null, {
          statusCode: 200
       });

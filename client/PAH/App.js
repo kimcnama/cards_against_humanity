@@ -9,6 +9,7 @@
 import React from 'react';
 
 import {Provider} from 'react-redux';
+import SplashScreen from 'react-native-splash-screen';
 
 import configureStore from './src/store';
 
@@ -25,6 +26,10 @@ const PAH = () => {
 };
 
 export default class App extends React.Component {
+  componentDidMount() {
+    SplashScreen.hide();
+  }
+
   render() {
     return <PAH />;
   }

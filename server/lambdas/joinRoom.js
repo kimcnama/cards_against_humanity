@@ -5,7 +5,7 @@ let send = undefined;
 const TABLE_NAME = "GameStates";
 const ANSWERS_TABLE = "Answers";
 const QUESTIONS_TABLE = "Questions";
-const HAND_SIZE = 3;
+const HAND_SIZE = 6;
 
 function init(event) {
    const apigwManagementApi = new AWS.ApiGatewayManagementApi({
@@ -88,10 +88,12 @@ function sendHandToUser(connId, hand) {
    }));
 }
 
-function notifyUserOfRoundHost(connId, hostId) {
+function notifyUserOfRoundHost(connId, hostId, hostName) {
    let msg = JSON.stringify({
       eventType: 'currentRoundHost',
       hostConnectionId: hostId,
+      hostName: hostName,
+      forcedNextRound: false,
    });
    send(connId, msg);
 }
@@ -128,7 +130,7 @@ function addPlayerToRoom(connectionId, roomName, playerName, groupName) {
                }
                
                sendHandToUser(connectionId, cardsToSendToUser);
-               notifyUserOfRoundHost(connectionId, connectionId);
+               notifyUserOfRoundHost(connectionId, connectionId, playerName);
                
                return ddb.put({
                   TableName: TABLE_NAME,
@@ -138,6 +140,7 @@ function addPlayerToRoom(connectionId, roomName, playerName, groupName) {
                      players: [{"connectionId": connectionId, "playerName": playerName, "playerWins": 0, "isPlaying": true}],
                      numPlayers: 1,
                      roundHost: connectionId,
+                     roundHostName: playerName,
                      roundAnswers: [],
                      numAnswersIn: 0,
                      answerSubmitted: [],
@@ -172,7 +175,7 @@ function addPlayerToRoom(connectionId, roomName, playerName, groupName) {
          
          sendQuestion(connectionId, data.Items[0].currentQuestion);
          
-         notifyUserOfRoundHost(connectionId, dataParsed.roundHost);
+         notifyUserOfRoundHost(connectionId, dataParsed.roundHost, dataParsed.roundHostName);
          
          let fieldsToUpdate = ["players", "playerIds", "numPlayers", "answersDealt"];
          var fieldValues = [];
@@ -263,6 +266,7 @@ exports.handler = (event, context, callback) => {
    console.log("groupName: %j", groupName);
    
    addPlayerToRoom(connectionIdForCurrentRequest, roomName, playerName, groupName).then(() => {
+      
       callback(null, {
          statusCode: 200
       });

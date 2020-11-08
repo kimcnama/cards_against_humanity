@@ -12,91 +12,67 @@ import {formatText} from './../../shared/Utils';
 
 // redux
 import {connect} from 'react-redux';
-import {addRoom, addPlayerName} from './../../actions/game';
+import {addGroup} from './../../actions/game';
 
 const {width, height} = Dimensions.get('window');
 
 // required for redux
 const mapDispatchToProps = (dispatch) => {
   return {
-    addRoomProp: (room) => dispatch(addRoom(room)),
-    addPlayerNameProp: (player) => dispatch(addPlayerName(player)),
+    addGroupProp: (group) => dispatch(addGroup(group)),
   };
 };
 
 const bodyText =
-  'What is room name? To enter a game with your friends, you must all enter the same room name. To ensure you are not entering an old room, please make up a room name that has likely not been used before.';
+  'What is group? Custom questions and answer cards you and your group enter will be saved to the database. In order to to get these cards added to your card decks, make sure to enter the correct group name.';
 
-class GameSetup extends Component {
+class InputGroup extends Component {
   constructor(props) {
     super();
     this.navigation = props.navigation;
     this.state = {
-      roomName: 'auto',
-      playerName: '',
+      groupName: 'phenibrutes',
       errorText: '',
     };
   }
 
   proceed() {
-    if (!this.state.playerName) {
+    if (!this.state.groupName) {
       this.setState({
         ...this.state,
-        errorText: 'Please enter a name!',
+        errorText: 'Please enter the name of a group to be part of!',
       });
       return;
     }
-    if (!this.state.roomName) {
-      this.setState({
-        ...this.state,
-        errorText: 'Please enter the name of a room to join!',
-      });
-      return;
-    }
-    this.props.addRoomProp(this.state.roomName);
-    this.props.addPlayerNameProp(this.state.playerName);
-    this.props.navigation.navigate('InputGroup');
+
+    this.props.addGroupProp(this.state.groupName);
+
+    this.navigation.popToTop();
+    this.navigation.replace('Hand');
   }
 
-  onRoomNameText = (text) => {
+  onGroupTextChange(text) {
     this.setState({
       ...this.state,
-      roomName: formatText(text, false, true),
+      groupName: formatText(text, false, true),
       errorText: '',
     });
-  };
-
-  onPlayerNameText = (text) => {
-    this.setState({
-      ...this.state,
-      playerName: formatText(text, false, true),
-      errorText: '',
-    });
-  };
+  }
 
   render() {
     return (
       <View style={styles.conatiner}>
         <SafeAreaView style={styles.conatiner}>
           <View style={styles.topSection}>
-            <Text style={styles.heading}>Setup Menu</Text>
+            <Text style={styles.heading}>Group</Text>
             <View style={styles.textInputView}>
               <View style={{height: height * 0.03}} />
-              <Text style={styles.bodyText}>Your Name</Text>
+              <Text style={styles.bodyText}>Group Name</Text>
               <View style={{height: height * 0.01}} />
               <TextInput
                 style={styles.textBox}
-                onChangeText={(text) => this.onPlayerNameText(text)}
-                value={this.state.playerName}
-                textAlign={'center'}
-              />
-              <View style={{height: height * 0.03}} />
-              <Text style={styles.bodyText}>Room Name</Text>
-              <View style={{height: height * 0.01}} />
-              <TextInput
-                style={styles.textBox}
-                onChangeText={(text) => this.onRoomNameText(text)}
-                value={this.state.roomName}
+                onChangeText={(text) => this.onGroupTextChange(text)}
+                value={this.state.groupName}
                 textAlign={'center'}
               />
               <View style={{height: height * 0.03}} />
@@ -118,7 +94,7 @@ class GameSetup extends Component {
   }
 }
 
-export default connect(null, mapDispatchToProps)(GameSetup);
+export default connect(null, mapDispatchToProps)(InputGroup);
 
 const styles = StyleSheet.create({
   conatiner: {
